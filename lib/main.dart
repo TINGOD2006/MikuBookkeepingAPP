@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 
-void main(){
-  runApp (const MyApp());
+void main() {
+  runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget{
+class AppColor {
+  //Color Palette
+  static const Color primary = Color.fromARGB(255, 0, 122, 244);
+  static const Color secondary = Color.fromARGB(255, 5, 169, 239);
+}
+
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
-  Widget build(BuildContext context){
+  Widget build(BuildContext context) {
     return MaterialApp(
-      title:'Miku Counter',
+      title: 'Miku Counter',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: AppColor.primary),
@@ -24,12 +30,7 @@ class MyApp extends StatelessWidget{
   }
 }
 
-class AppColor{         //Color Palette
-  static const Color primary = Color.fromARGB(255, 0, 122, 244);
-  static const Color secondary = Color.fromARGB(255, 5, 169, 239);
-}
-
-class MyHomePage extends StatefulWidget{
+class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
 
   final String title;
@@ -38,14 +39,11 @@ class MyHomePage extends StatefulWidget{
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage>{
-
+class _MyHomePageState extends State<MyHomePage> {
   @override
-  Widget build(BuildContext context){
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
+      appBar: AppBar(title: Text(widget.title)),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
