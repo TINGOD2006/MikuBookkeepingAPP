@@ -6,15 +6,27 @@ void main(){
 
 class MyApp extends StatelessWidget{
   const MyApp({super.key});
-
   @override
   Widget build(BuildContext context){
     return MaterialApp(
       title:'Miku Counter',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const MyHomePage(title: 'Miku Counter')
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: AppColor.primary),
+        brightness: Brightness.light,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppColor.primary,
+          foregroundColor: AppColor.secondary,
+        ),
+      ),
+      home: const MyHomePage(title: 'Miku Counter'),
     );
   }
+}
+
+class AppColor{         //Color Palette
+  static const Color primary = Color.fromARGB(255, 0, 122, 244);
+  static const Color secondary = Color.fromARGB(255, 5, 169, 239);
 }
 
 class MyHomePage extends StatefulWidget{
@@ -27,13 +39,6 @@ class MyHomePage extends StatefulWidget{
 }
 
 class _MyHomePageState extends State<MyHomePage>{
-  int _counter = 0;
-
-  void _incrementCounter(){
-    setState(() {
-      _counter++;
-    });
-  }
 
   @override
   Widget build(BuildContext context){
@@ -46,14 +51,8 @@ class _MyHomePageState extends State<MyHomePage>{
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             const Text('You have pushed the button this many times:'),
-            Text('$_counter', style: Theme.of(context).textTheme.headlineMedium),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }
