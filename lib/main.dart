@@ -290,15 +290,6 @@ class ProfilePage extends StatelessWidget {
               'user@example.com',
               style: TextStyle(fontSize: 16, color: Colors.grey),
             ),
-            SizedBox(height: 20),
-            Card(
-              margin: EdgeInsets.symmetric(horizontal: 40),
-              child: ListTile(leading: Icon(Icons.settings), title: Text('设置')),
-            ),
-            Card(
-              margin: EdgeInsets.symmetric(horizontal: 40),
-              child: ListTile(leading: Icon(Icons.info), title: Text('关于')),
-            ),
           ],
         ),
       ),
