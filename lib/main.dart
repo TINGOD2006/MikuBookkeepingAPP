@@ -5,7 +5,6 @@ void main() {
 }
 
 class AppColor {
-  // Color Palette
   static const Color primary = Color.fromARGB(255, 0, 122, 244);
   static const Color secondary = Color.fromARGB(255, 5, 169, 239);
   static const Color background = Color.fromARGB(255, 240, 244, 248);
@@ -17,17 +16,17 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Miku Counter',
+      title: 'Miku 記帳',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: AppColor.primary),
         brightness: Brightness.light,
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColor.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColor.background,
         ),
       ),
-      home: const MyHomePage(title: 'Miku Counter'),
+      home: const MyHomePage(title: "歡迎使用 Miku 記帳"),
     );
   }
 }
@@ -42,14 +41,12 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  // 当前选中的底部导航索引
   int _selectedIndex = 0;
 
-  // 四个页面的 Widget
   static const List<Widget> _pages = [
     HomePage(),
-    CounterPage(),
-    FavoritePage(),
+    BookkeepingPage(),
+    AnalysisPage(),
     ProfilePage(),
   ];
 
@@ -60,6 +57,13 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  // 中间浮动按钮点击事件
+  void _onFABPressed() {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('添加功能开发中')));
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -69,37 +73,86 @@ class _MyHomePageState extends State<MyHomePage> {
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
-              // 设置按钮功能
               ScaffoldMessenger.of(context)
                   .showSnackBar(const SnackBar(content: Text('设置功能开发中')));
             },
           ),
         ],
       ),
-      // 主体内容 - 根据选中的索引显示不同页面
+      // ==========主體內容==========
       body: _pages[_selectedIndex],
-      // 底部导航栏
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppColor.primary,
-        unselectedItemColor: Colors.grey,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: '首頁'),
-          BottomNavigationBarItem(icon: Icon(Icons.calculate), label: '帳目'),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: '分析'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: '我的'),
+      
+      // ==========中间圓形按钮==========
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, 30), // 向下偏移30像素
+        child: FloatingActionButton(
+            onPressed: _onFABPressed,
+            backgroundColor: AppColor.primary,
+            elevation: 4,
+            shape: const CircleBorder(),
+            child: const Icon(
+                Icons.add,
+                color: Colors.white,
+                size: 30,
+                ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      
+      // ========== 底部导航栏  ==========
+      bottomNavigationBar: BottomAppBar(
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 6.0,
+        color: AppColor.background,
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              // 左边2个导航项
+              _buildNavItem(Icons.home, '明細', 0),
+              _buildNavItem(Icons.book, '記帳', 1),
+              // 中间留空给圓形按钮
+              const SizedBox(width: 40),
+              // 右边2个导航项
+              _buildNavItem(Icons.analytics, '分析', 2),
+              _buildNavItem(Icons.person, '我的', 3),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==========自定义导航项构建方法==========
+  Widget _buildNavItem(IconData icon, String label, int index) {
+    final isSelected = _selectedIndex == index;
+    
+    return InkWell(
+      onTap: () => _onItemTapped(index),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: isSelected ? AppColor.primary : Colors.grey,
+            size: 28,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: isSelected ? AppColor.primary : Colors.grey,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// ========== 四个页面组件 ==========
-
-// 1. 首页
+// ========== 1. 明細頁面 ==========
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -114,12 +167,8 @@ class HomePage extends StatelessWidget {
             Icon(Icons.home, size: 80, color: AppColor.primary),
             SizedBox(height: 16),
             Text(
-              '欢迎来到 Miku Counter',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppColor.primary,
-              ),
+              '明細頁面',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -128,15 +177,15 @@ class HomePage extends StatelessWidget {
   }
 }
 
-// 2. 计数器页面（原来的主要功能）
-class CounterPage extends StatefulWidget {
-  const CounterPage({super.key});
+// ========== 2. 記帳頁面 ==========
+class BookkeepingPage extends StatefulWidget {
+  const BookkeepingPage({super.key});
 
   @override
-  State<CounterPage> createState() => _CounterPageState();
+  State<BookkeepingPage> createState() => _BookkeepingPageState();
 }
 
-class _CounterPageState extends State<CounterPage> {
+class _BookkeepingPageState extends State<BookkeepingPage> {
   int _counter = 0;
 
   void _incrementCounter() {
@@ -166,7 +215,7 @@ class _CounterPageState extends State<CounterPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text(
-              'Miku Counter',
+              'Miku 记账',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -174,7 +223,6 @@ class _CounterPageState extends State<CounterPage> {
               ),
             ),
             const SizedBox(height: 20),
-            // 计数显示
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
               decoration: BoxDecoration(
@@ -198,7 +246,6 @@ class _CounterPageState extends State<CounterPage> {
               ),
             ),
             const SizedBox(height: 30),
-            // 操作按钮
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -236,9 +283,9 @@ class _CounterPageState extends State<CounterPage> {
   }
 }
 
-// 3. 收藏页面
-class FavoritePage extends StatelessWidget {
-  const FavoritePage({super.key});
+// ========== 3. 分析頁面 ==========
+class AnalysisPage extends StatelessWidget {
+  const AnalysisPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -248,14 +295,12 @@ class FavoritePage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.favorite, size: 80, color: Colors.red),
+            Icon(Icons.analytics, size: 80, color: AppColor.primary),
             SizedBox(height: 16),
             Text(
-              '收藏列表',
+              '分析頁面',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
-            SizedBox(height: 8),
-            Text('还没有收藏内容', style: TextStyle(fontSize: 16, color: Colors.grey)),
           ],
         ),
       ),
@@ -263,7 +308,7 @@ class FavoritePage extends StatelessWidget {
   }
 }
 
-// 4. 个人中心页面
+// ========== 4. 我的頁面 ==========
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
