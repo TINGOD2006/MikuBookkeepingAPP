@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/app_colors.dart';
 
 class SummaryItem extends StatelessWidget {
   final String label;
@@ -19,8 +20,8 @@ class SummaryItem extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white70,
+          style: TextStyle(
+            color: AppColor.text.withValues(alpha: 0.8),
             fontSize: 14,
           ),
         ),

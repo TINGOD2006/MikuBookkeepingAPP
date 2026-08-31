@@ -28,7 +28,7 @@ class _BookkeepingPageState extends State<BookkeepingPage> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColor.black,
+      color: AppColor.background,
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

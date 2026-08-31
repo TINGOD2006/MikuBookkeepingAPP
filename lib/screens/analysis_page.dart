@@ -7,7 +7,7 @@ class AnalysisPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColor.black,
+      color: AppColor.background,
       child: const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

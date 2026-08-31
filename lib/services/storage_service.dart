@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/record.dart';
 
@@ -11,7 +13,7 @@ class StorageService {
     await prefs.setStringList(_recordsKey, recordsJson);
   }
 
-  // 載入所有記錄
+  // 載入所有記錄（ 過濾空字串）
   Future<List<Record>> loadRecords() async {
     final prefs = await SharedPreferences.getInstance();
     final List<String>? recordsJson = prefs.getStringList(_recordsKey);
@@ -19,7 +21,17 @@ class StorageService {
     if (recordsJson == null) return [];
 
     return recordsJson
-        .map((json) => Record.fromJson(jsonDecode(json)))
+        .where((json) => json.isNotEmpty) //  跳過空字串
+        .map((json) {
+          try {
+            return Record.fromJson(jsonDecode(json) as Map<String, dynamic>);
+          } catch (e) {
+            //  如果解析失敗，跳過該筆資料
+            debugPrint('解析記錄失敗: $e, 內容: $json');
+            return null;
+          }
+        })
+        .whereType<Record>() // 過濾掉 null
         .toList();
   }
 
@@ -38,15 +50,5 @@ class StorageService {
       records.removeAt(index);
       await saveRecords(records);
     }
-  }
-
-  // 輔助方法：解析 JSON
-  Map<String, dynamic> jsonDecode(String json) {
-    return Map<String, dynamic>.from(_jsonDecode(json));
-  }
-
-  // 使用 dart:convert 的 jsonDecode
-  dynamic _jsonDecode(String json) {
-    return jsonDecode(json);
   }
 }

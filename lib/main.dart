@@ -5,9 +5,8 @@ import 'screens/bookkeeping_page.dart';
 import 'screens/analysis_page.dart';
 import 'screens/profile_page.dart';
 import 'widgets/nav_item.dart';
-import 'widgets/category_chip.dart';
+import 'widgets/add_record_dialog.dart';
 import 'services/storage_service.dart';
-import 'models/record.dart';
 
 void main() {
   runApp(const MyApp());
@@ -26,7 +25,7 @@ class MyApp extends StatelessWidget {
         brightness: Brightness.light,
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColor.primary,
-          foregroundColor: AppColor.white,
+          foregroundColor: AppColor.text,  // ✅ 修正為 text
         ),
       ),
       home: const MyHomePage(title: "Miku 記帳"),
@@ -62,7 +61,10 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _refreshHomePage() {
-    _homePageKey.currentState?.refreshRecords();
+    final homePageState = _homePageKey.currentState;
+    if (homePageState != null) {
+      homePageState.refreshRecords();
+    }
   }
 
   void _onItemTapped(int index) {
@@ -70,226 +72,20 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _onFABPressed() {
-    final TextEditingController amountController = TextEditingController();
-    final TextEditingController noteController = TextEditingController();
-    String selectedCategory = '餐飲';
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) => Scaffold(
+          backgroundColor: AppColor.cardBackground,
+          body: AddRecordDialog(
+            onSave: (record) async {
+              await _storage.addRecord(record);
+              _refreshHomePage();
+            },
+          ),
+        ),
       ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    '新增記帳',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: AppColor.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    '金額',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: amountController,
-                    decoration: InputDecoration(
-                      hintText: '請輸入金額',
-                      prefixText: '\$ ',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                    keyboardType: TextInputType.number,
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    '分類',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 40,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        CategoryChip(
-                          label: '餐飲',
-                          isSelected: selectedCategory == '餐飲',
-                          onTap: () => setState(() => selectedCategory = '餐飲'),
-                        ),
-                        CategoryChip(
-                          label: '交通',
-                          isSelected: selectedCategory == '交通',
-                          onTap: () => setState(() => selectedCategory = '交通'),
-                        ),
-                        CategoryChip(
-                          label: '購物',
-                          isSelected: selectedCategory == '購物',
-                          onTap: () => setState(() => selectedCategory = '購物'),
-                        ),
-                        CategoryChip(
-                          label: '居家',
-                          isSelected: selectedCategory == '居家',
-                          onTap: () => setState(() => selectedCategory = '居家'),
-                        ),
-                        CategoryChip(
-                          label: '娛樂',
-                          isSelected: selectedCategory == '娛樂',
-                          onTap: () => setState(() => selectedCategory = '娛樂'),
-                        ),
-                        CategoryChip(
-                          label: '教育',
-                          isSelected: selectedCategory == '教育',
-                          onTap: () => setState(() => selectedCategory = '教育'),
-                        ),
-                        CategoryChip(
-                          label: '醫療',
-                          isSelected: selectedCategory == '醫療',
-                          onTap: () => setState(() => selectedCategory = '醫療'),
-                        ),
-                        CategoryChip(
-                          label: '3C',
-                          isSelected: selectedCategory == '3C',
-                          onTap: () => setState(() => selectedCategory = '3C'),
-                        ),
-                        CategoryChip(
-                          label: '禮物',
-                          isSelected: selectedCategory == '禮物',
-                          onTap: () => setState(() => selectedCategory = '禮物'),
-                        ),
-                        CategoryChip(
-                          label: '投資',
-                          isSelected: selectedCategory == '投資',
-                          onTap: () => setState(() => selectedCategory = '投資'),
-                        ),
-                        CategoryChip(
-                          label: '其他',
-                          isSelected: selectedCategory == '其他',
-                          onTap: () => setState(() => selectedCategory = '其他'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    '備註',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: noteController,
-                    decoration: InputDecoration(
-                      hintText: '請輸入備註',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      prefixIcon: const Icon(Icons.note_add, color: Colors.grey),
-                    ),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        if (amountController.text.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('請輸入金額！'),
-                              behavior: SnackBarBehavior.floating,
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                          return;
-                        }
-
-                        final amount = double.tryParse(amountController.text) ?? 0;
-                        if (amount <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('請輸入有效金額！'),
-                              behavior: SnackBarBehavior.floating,
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                          return;
-                        }
-
-                        final record = Record(
-                          amount: amount,
-                          category: selectedCategory,
-                          note: noteController.text.isEmpty ? '無備註' : noteController.text,
-                          date: DateTime.now(),
-                        );
-
-                        await _storage.addRecord(record);
-                        _refreshHomePage();
-
-                        if (!context.mounted) return;
-                        Navigator.pop(context);
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('記帳成功'),
-                            behavior: SnackBarBehavior.floating,
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColor.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        '保存記帳',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 
@@ -325,7 +121,7 @@ class _MyHomePageState extends State<MyHomePage> {
               shape: const CircleBorder(),
               child: const Icon(
                 Icons.add,
-                color: Colors.white,
+                color: AppColor.text,  // ✅ 改為 text
                 size: 30,
               ),
             ),
@@ -337,7 +133,7 @@ class _MyHomePageState extends State<MyHomePage> {
         top: false,
         child: Container(
           height: _bottomNavBarHeight,
-          color: Colors.black,
+          color: AppColor.background,  // ✅ 改為 background
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
