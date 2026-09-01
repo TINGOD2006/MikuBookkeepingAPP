@@ -4,20 +4,37 @@ class CategoryItem {
   final String name;
   final IconData icon;
   final Color color;
+  final bool isCustom; // ✅ 標記是否為自定義分類
 
   const CategoryItem({
     required this.name,
     required this.icon,
     required this.color,
+    this.isCustom = false, // 預設為非自定義
   });
+
+  // ✅ 複製方法（用於修改）
+  CategoryItem copyWith({
+    String? name,
+    IconData? icon,
+    Color? color,
+    bool? isCustom,
+  }) {
+    return CategoryItem(
+      name: name ?? this.name,
+      icon: icon ?? this.icon,
+      color: color ?? this.color,
+      isCustom: isCustom ?? this.isCustom,
+    );
+  }
 }
 
 class CategoryData {
-  // 類型標籤（只有支出和收入）
+  // 類型標籤
   static const List<String> types = ['支出', '收入'];
 
-  // ========== 支出分類 ==========
-  static const List<CategoryItem> expenseCategories = [
+  // ========== 預設支出分類 ==========
+  static const List<CategoryItem> _defaultExpenseCategories = [
     CategoryItem(name: '學費', icon: Icons.school, color: Colors.blue),
     CategoryItem(name: '購物', icon: Icons.shopping_bag, color: Colors.purple),
     CategoryItem(name: '食物', icon: Icons.restaurant, color: Colors.orange),
@@ -63,8 +80,8 @@ class CategoryData {
     CategoryItem(name: '蔬菜', icon: Icons.agriculture, color: Colors.green),
   ];
 
-  // ========== 收入分類 ==========
-  static const List<CategoryItem> incomeCategories = [
+  // ========== 預設收入分類 ==========
+  static const List<CategoryItem> _defaultIncomeCategories = [
     CategoryItem(name: '薪水', icon: Icons.payments, color: Colors.green),
     CategoryItem(name: '獎金', icon: Icons.emoji_events, color: Colors.amber),
     CategoryItem(name: '禮金', icon: Icons.card_giftcard, color: Colors.pink),
@@ -86,25 +103,88 @@ class CategoryData {
     CategoryItem(name: '其他收入', icon: Icons.more_horiz, color: Colors.grey),
   ];
 
-  // ========== 根據類型獲取分類 ==========
+  // ✅ 可變分類列表（支援自定義）
+  static List<CategoryItem> _expenseCategories = List.from(
+    _defaultExpenseCategories,
+  );
+  static List<CategoryItem> _incomeCategories = List.from(
+    _defaultIncomeCategories,
+  );
+
+  // ✅ 獲取分類（返回副本，避免外部修改）
+  static List<CategoryItem> getExpenseCategories() {
+    return List.from(_expenseCategories);
+  }
+
+  static List<CategoryItem> getIncomeCategories() {
+    return List.from(_incomeCategories);
+  }
+
   static List<CategoryItem> getCategories(String type) {
     if (type == '支出') {
-      return expenseCategories;
+      return getExpenseCategories();
     } else {
-      return incomeCategories;
+      return getIncomeCategories();
     }
   }
 
-  // ✅ 根據類別名稱獲取圖標和顏色（在所有分類中查找）
+  // ✅ 新增自定義分類
+  static void addCustomCategory(
+    String type,
+    String name, {
+    IconData icon = Icons.label,
+    Color color = Colors.grey,
+  }) {
+    final newCategory = CategoryItem(
+      name: name,
+      icon: icon,
+      color: color,
+      isCustom: true,
+    );
+
+    if (type == '支出') {
+      _expenseCategories.add(newCategory);
+    } else {
+      _incomeCategories.add(newCategory);
+    }
+  }
+
+  // ✅ 刪除自定義分類（只能刪除自定義的）
+  static bool deleteCustomCategory(String type, String name) {
+    if (type == '支出') {
+      final index = _expenseCategories.indexWhere(
+        (item) => item.name == name && item.isCustom,
+      );
+      if (index != -1) {
+        _expenseCategories.removeAt(index);
+        return true;
+      }
+    } else {
+      final index = _incomeCategories.indexWhere(
+        (item) => item.name == name && item.isCustom,
+      );
+      if (index != -1) {
+        _incomeCategories.removeAt(index);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // ✅ 重置為預設分類（刪除所有自定義）
+  static void resetToDefault() {
+    _expenseCategories = List.from(_defaultExpenseCategories);
+    _incomeCategories = List.from(_defaultIncomeCategories);
+  }
+
+  // ✅ 根據類別名稱獲取圖標和顏色
   static CategoryItem? getCategory(String name) {
-    // 先在支出分類中查找
-    for (final item in expenseCategories) {
+    for (final item in _expenseCategories) {
       if (item.name == name) {
         return item;
       }
     }
-    // 再到收入分類中查找
-    for (final item in incomeCategories) {
+    for (final item in _incomeCategories) {
       if (item.name == name) {
         return item;
       }

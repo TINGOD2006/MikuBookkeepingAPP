@@ -32,17 +32,17 @@ flutter:
 flutter_launcher_icons:
   android: true  # ✅ 改为 true
   ios: true
-  image_path: "assets/image/MikuCount_title.png"  # ✅ 修正路径
+  image_path: "assets/image/MikuCount_title.png"  
   
   web:
     generate: true
-    image_path: "assets/image/MikuCount_title.png"  # ✅ 修正路径
+    image_path: "assets/image/MikuCount_title.png"  
   
   windows:
     generate: true
-    image_path: "assets/image/MikuCount_title.png"  # ✅ 修正路径
+    image_path: "assets/image/MikuCount_title.png"  
     icon_size: 48
   
   macos:
     generate: true
-    image_path: "assets/image/MikuCount_title.png"  # ✅ 修正路径
+    image_path: "assets/image/MikuCount_title.png"  
