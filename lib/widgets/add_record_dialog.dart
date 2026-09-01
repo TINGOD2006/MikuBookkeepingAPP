@@ -37,7 +37,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     '⌫',
   ];
 
-  // ========== 根據類型獲取分類列表 ==========
   List<CategoryItem> _getCategoriesByType(String type) {
     return CategoryData.getCategories(type);
   }
@@ -51,17 +50,43 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     return Scaffold(
       backgroundColor: AppColor.background,
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildTypeTabs(),
-            const SizedBox(height: 12),
-            Expanded(child: _buildCategoryGrid()),
-            if (_showInputArea) ...[_buildInputArea()],
-          ],
+        // ✅ 使用 GestureDetector 監聽點擊事件
+        child: GestureDetector(
+          onTap: () {
+            // ✅ 點擊空白區域時關閉鍵盤（收起輸入區域）
+            _dismissKeyboard();
+          },
+          behavior: HitTestBehavior.opaque,
+          child: Column(
+            children: [
+              _buildHeader(),
+              _buildTypeTabs(),
+              const SizedBox(height: 12),
+              Expanded(child: _buildCategoryGrid()),
+              if (_showInputArea) ...[_buildInputArea()],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  // ========== ✅ 關閉鍵盤方法 ==========
+  void _dismissKeyboard() {
+    // 如果鍵盤是開啟的，關閉它
+    if (_showInputArea) {
+      // 先取消焦點（如果有 TextField 在編輯）
+      FocusScope.of(context).unfocus();
+
+      // 延遲一點點再關閉輸入區域，讓用戶看到過渡效果
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          setState(() {
+            _showInputArea = false;
+          });
+        }
+      });
+    }
   }
 
   // ========== 標題欄 ==========
