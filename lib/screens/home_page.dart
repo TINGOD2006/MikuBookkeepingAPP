@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/record.dart';
 import '../constants/app_colors.dart';
 import '../services/storage_service.dart';
@@ -71,7 +72,9 @@ class HomePageState extends State<HomePage> {
     final todayStr =
         '${today.year}/${today.month.toString().padLeft(2, '0')}/${today.day.toString().padLeft(2, '0')}';
     return _records
-        .where((record) => record.formattedDate == todayStr && record.amount < 0)
+        .where(
+          (record) => record.formattedDate == todayStr && record.amount < 0,
+        )
         .fold(0, (sum, record) => sum + record.amount.abs());
   }
 
@@ -109,9 +112,7 @@ class HomePageState extends State<HomePage> {
       color: AppColor.background,
       child: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(
-                color: AppColor.primary,
-              ),
+              child: CircularProgressIndicator(color: AppColor.primary),
             )
           : Column(
               children: [
@@ -148,31 +149,19 @@ class HomePageState extends State<HomePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          SummaryItem(
-            label: '支出',
-            amount: _totalExpense,
-            color: AppColor.text,
-          ),
+          SummaryItem(label: '支出', amount: _totalExpense, color: AppColor.text),
           Container(
             width: 1,
             height: 40,
             color: AppColor.text.withValues(alpha: 0.2),
           ),
-          SummaryItem(
-            label: '收入',
-            amount: _totalIncome,
-            color: AppColor.text,
-          ),
+          SummaryItem(label: '收入', amount: _totalIncome, color: AppColor.text),
           Container(
             width: 1,
             height: 40,
             color: AppColor.text.withValues(alpha: 0.2),
           ),
-          SummaryItem(
-            label: '結餘',
-            amount: _balance,
-            color: AppColor.text,
-          ),
+          SummaryItem(label: '結餘', amount: _balance, color: AppColor.text),
           Container(
             width: 1,
             height: 40,
@@ -195,20 +184,11 @@ class HomePageState extends State<HomePage> {
         children: [
           Icon(Icons.inbox, size: 64, color: AppColor.textSecondary),
           SizedBox(height: 16),
-          Text(
-            '尚無記帳記錄',
-            style: TextStyle(
-              fontSize: 18,
-              color: AppColor.text,
-            ),
-          ),
+          Text('尚無記帳記錄', style: TextStyle(fontSize: 18, color: AppColor.text)),
           SizedBox(height: 8),
           Text(
             '點擊 ✚ 按鈕新增記錄',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColor.textSecondary,
-            ),
+            style: TextStyle(fontSize: 14, color: AppColor.textSecondary),
           ),
         ],
       ),
@@ -240,7 +220,12 @@ class HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildDateHeader(String date, double dailyExpense, double dailyIncome, double dailyTotal) {
+  Widget _buildDateHeader(
+    String date,
+    double dailyExpense,
+    double dailyIncome,
+    double dailyTotal,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -315,7 +300,8 @@ class HomePageState extends State<HomePage> {
       final localIndex = entry.key;
       final record = entry.value;
 
-      final uniqueKey = '${record.date.millisecondsSinceEpoch}_'
+      final uniqueKey =
+          '${record.date.millisecondsSinceEpoch}_'
           '${record.category}_'
           '${record.amount}_'
           '${record.note}_'
@@ -430,10 +416,7 @@ class HomePageState extends State<HomePage> {
                       ),
                       child: Text(
                         record.formattedTime,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
                       ),
                     ),
                   ],
@@ -441,10 +424,7 @@ class HomePageState extends State<HomePage> {
                 const SizedBox(height: 2),
                 Text(
                   record.note,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -455,7 +435,10 @@ class HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '\$${displayAmount.toStringAsFixed(0)}',
+                isExpense
+                    ? '-\$${displayAmount.toStringAsFixed(0)}'
+                    : //支出加負號
+                      '\$${displayAmount.toStringAsFixed(0)}',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -465,10 +448,7 @@ class HomePageState extends State<HomePage> {
               if (record.createdAt.day != record.date.day)
                 Text(
                   '建立: ${record.formattedTime}',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey[400],
-                  ),
+                  style: TextStyle(fontSize: 10, color: Colors.grey[400]),
                 ),
             ],
           ),
@@ -480,10 +460,7 @@ class HomePageState extends State<HomePage> {
   Widget _buildDivider() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Divider(
-        color: Colors.grey[800],
-        thickness: 1,
-      ),
+      child: Divider(color: Colors.grey[800], thickness: 1),
     );
   }
 }

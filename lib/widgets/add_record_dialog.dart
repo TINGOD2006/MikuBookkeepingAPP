@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../constants/app_colors.dart';
 import '../constants/categories.dart';
 import '../models/record.dart';
@@ -6,10 +7,7 @@ import '../models/record.dart';
 class AddRecordDialog extends StatefulWidget {
   final Function(Record) onSave;
 
-  const AddRecordDialog({
-    super.key,
-    required this.onSave,
-  });
+  const AddRecordDialog({super.key, required this.onSave});
 
   @override
   State<AddRecordDialog> createState() => _AddRecordDialogState();
@@ -24,10 +22,18 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
   bool _isLoading = false;
 
   static const List<String> _numberKeys = [
-    '7', '8', '9',
-    '4', '5', '6',
-    '1', '2', '3',
-    '清空', '0', '⌫',
+    '7',
+    '8',
+    '9',
+    '4',
+    '5',
+    '6',
+    '1',
+    '2',
+    '3',
+    '清空',
+    '0',
+    '⌫',
   ];
 
   @override
@@ -39,35 +45,30 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
           children: [
             // ✅ 更緊湊的標題欄
             _buildHeader(),
-            
+
             // 類型選擇
             _buildTypeTabs(),
-            
+
             const SizedBox(height: 12),
-            
+
             // ✅ 分類網格（更緊密）
-            Expanded(
-              child: _buildCategoryGrid(),
-            ),
-            
+            Expanded(child: _buildCategoryGrid()),
+
             // 輸入區域
-            if (_showInputArea) ...[
-              _buildInputArea(),
-            ],
+            if (_showInputArea) ...[_buildInputArea()],
           ],
         ),
       ),
     );
   }
 
-  // ========== ✅ 標題欄（置中 + 更細） ==========
+  // ==========  標題欄 ==========
   Widget _buildHeader() {
     return SizedBox(
-      height: 44, // ✅ 固定高度，更細
-      child: Stack(
-        alignment: Alignment.center,
+      height: 44,
+      child: Row(
         children: [
-          // ✅ 標題置中
+          const Spacer(),
           const Text(
             '記帳',
             style: TextStyle(
@@ -76,25 +77,16 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
               color: AppColor.text,
             ),
           ),
-          // ✅ 關閉按鈕固定在右上角
-          Positioned(
-            right: 16,
-            top: 0,
-            bottom: 0,
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.only(right: 0), // 從 20 改成 0，更靠右
             child: IconButton(
               onPressed: () {
                 Navigator.pop(context);
               },
-              icon: const Icon(
-                Icons.close,
-                color: AppColor.text,
-                size: 24,
-              ),
+              icon: const Icon(Icons.close, color: AppColor.text, size: 24),
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(
-                minWidth: 32,
-                minHeight: 32,
-              ),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             ),
           ),
         ],
@@ -136,7 +128,9 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
                       type,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
                         color: isSelected ? AppColor.text : Colors.grey[400],
                       ),
                     ),
@@ -150,21 +144,23 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     );
   }
 
-  // ========== ✅ 分類網格（更緊密） ==========
+  // ==========  分類網格（更緊密） ==========
   Widget _buildCategoryGrid() {
+    final categories = CategoryData.getCategories(_selectedType);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: GridView.builder(
         key: ValueKey('category_grid_${_selectedType}_$_selectedCategory'),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
-          childAspectRatio: 0.9, // ✅ 稍微拉長，更緊湊
-          crossAxisSpacing: 4,   // ✅ 水平間距縮小
-          mainAxisSpacing: 2,    // ✅ 垂直間距縮小
+          childAspectRatio: 0.9, // 稍微拉長，更緊湊
+          crossAxisSpacing: 4, // 水平間距縮小
+          mainAxisSpacing: 2, // 垂直間距縮小
         ),
-        itemCount: CategoryData.allCategories.length,
+        itemCount: categories.length,
         itemBuilder: (context, index) {
-          final category = CategoryData.allCategories[index];
+          final category = categories[index];
           final isSelected = _selectedCategory == category.name;
           return _buildCategoryItem(category, isSelected);
         },
@@ -172,7 +168,7 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     );
   }
 
-  // ========== ✅ 分類項目（更小、更緊密） ==========
+  // ========== 分類項目（更小、更緊密） ==========
   Widget _buildCategoryItem(CategoryItem category, bool isSelected) {
     return GestureDetector(
       key: ValueKey('category_item_${category.name}'),
@@ -185,7 +181,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // ✅ 圓形按鈕縮小
           Container(
             width: 44,
             height: 44,
@@ -227,17 +222,12 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 金額顯示
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
-                  Icon(
-                    _getCategoryIcon(),
-                    color: AppColor.primary,
-                    size: 18,
-                  ),
+                  Icon(_getCategoryIcon(), color: AppColor.primary, size: 18),
                   const SizedBox(width: 6),
                   Text(
                     _selectedCategory,
@@ -263,11 +253,7 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
           // 備註
           Row(
             children: [
-              const Icon(
-                Icons.note_add,
-                color: Colors.grey,
-                size: 16,
-              ),
+              const Icon(Icons.note_add, color: Colors.grey, size: 16),
               const SizedBox(width: 6),
               Expanded(
                 child: TextField(
@@ -282,10 +268,7 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(vertical: 2),
                   ),
-                  style: const TextStyle(
-                    color: AppColor.text,
-                    fontSize: 13,
-                  ),
+                  style: const TextStyle(color: AppColor.text, fontSize: 13),
                 ),
               ),
             ],
@@ -399,9 +382,7 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColor.primary,
           foregroundColor: AppColor.text,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
         child: _isLoading
             ? const SizedBox(
@@ -458,7 +439,7 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     final record = Record(
       amount: finalAmount,
       category: _selectedCategory,
-      note: _note.isEmpty ? '無備註' : _note,
+      note: _note.isEmpty ? '' : _note,
       date: DateTime.now(),
       createdAt: DateTime.now(),
     );

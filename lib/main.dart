@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'constants/app_colors.dart';
 import 'screens/home_page.dart';
 import 'screens/bookkeeping_page.dart';
@@ -25,7 +26,7 @@ class MyApp extends StatelessWidget {
         brightness: Brightness.light,
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColor.primary,
-          foregroundColor: AppColor.text,  // ✅ 修正為 text
+          foregroundColor: AppColor.text, //
         ),
       ),
       home: const MyHomePage(title: "Miku 記帳"),
@@ -99,9 +100,8 @@ class _MyHomePageState extends State<MyHomePage> {
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('设置功能開發中')),
-              );
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text('设置功能開發中')));
             },
           ),
         ],
@@ -119,11 +119,7 @@ class _MyHomePageState extends State<MyHomePage> {
               backgroundColor: AppColor.primary,
               elevation: 4,
               shape: const CircleBorder(),
-              child: const Icon(
-                Icons.add,
-                color: AppColor.text,  // ✅ 改為 text
-                size: 30,
-              ),
+              child: const Icon(Icons.add, color: AppColor.text, size: 30),
             ),
           ),
         ),
@@ -133,7 +129,7 @@ class _MyHomePageState extends State<MyHomePage> {
         top: false,
         child: Container(
           height: _bottomNavBarHeight,
-          color: AppColor.background,  // ✅ 改為 background
+          color: AppColor.background,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
