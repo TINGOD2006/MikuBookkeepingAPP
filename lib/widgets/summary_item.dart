@@ -27,7 +27,7 @@ class SummaryItem extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '\$${amount.toStringAsFixed(0)}',
+          amount.toStringAsFixed(0), // ✅ 移除 $ 符號
           style: TextStyle(
             color: color,
             fontSize: 20,

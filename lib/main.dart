@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'constants/app_colors.dart';
 import 'constants/categories.dart';
-import 'screens/home_page.dart';
 import 'screens/bookkeeping_page.dart';
+import 'screens/budget_page.dart';
 import 'screens/analysis_page.dart';
 import 'screens/profile_page.dart';
 import 'widgets/nav_item.dart';
@@ -46,7 +46,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
   static const double _bottomNavBarHeight = 72;
-  final GlobalKey<HomePageState> _homePageKey = GlobalKey<HomePageState>();
+  final GlobalKey<BookkeepingPageState> _bookkeepingPageKey = GlobalKey<BookkeepingPageState>();
   late List<Widget> _pages;
   final StorageService _storage = StorageService();
 
@@ -54,17 +54,17 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     _pages = [
-      HomePage(key: _homePageKey),
-      const BookkeepingPage(),
+      BookkeepingPage(key: _bookkeepingPageKey),
+      const BudgetPage(),
       const AnalysisPage(),
       const ProfilePage(),
     ];
   }
 
-  void _refreshHomePage() {
-    final homePageState = _homePageKey.currentState;
-    if (homePageState != null) {
-      homePageState.refreshRecords();
+  void _refreshBookkeepingPage() {
+    final state = _bookkeepingPageKey.currentState;
+    if (state != null) {
+      state.refreshRecords();
     }
   }
 
@@ -82,7 +82,7 @@ class _MyHomePageState extends State<MyHomePage> {
           body: AddRecordDialog(
             onSave: (record) async {
               await _storage.addRecord(record);
-              _refreshHomePage();
+              _refreshBookkeepingPage();
             },
           ),
         ),
@@ -92,9 +92,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 主頁面不包含 AppBar，只包含 body 和底部導航
     return Scaffold(
-      body: _pages[_selectedIndex], // 子頁面自己管理 AppBar
+      body: _pages[_selectedIndex],
       floatingActionButton: Transform.translate(
         offset: const Offset(0, 25),
         child: Padding(
@@ -133,7 +132,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               NavItem(
                 icon: Icons.book,
-                label: '記帳',
+                label: '預算',
                 isSelected: _selectedIndex == 1,
                 onTap: () => _onItemTapped(1),
               ),

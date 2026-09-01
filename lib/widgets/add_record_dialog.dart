@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../constants/app_colors.dart';
 import '../constants/categories.dart';
 import '../models/record.dart';
@@ -22,19 +21,13 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
   bool _showInputArea = false;
   bool _isLoading = false;
 
+  DateTime _selectedDate = DateTime.now();
+
   static const List<String> _numberKeys = [
-    '7',
-    '8',
-    '9',
-    '4',
-    '5',
-    '6',
-    '1',
-    '2',
-    '3',
-    '清空',
-    '0',
-    '⌫',
+    '7', '8', '9',
+    '4', '5', '6',
+    '1', '2', '3',
+    '清空', '0', '⌫',
   ];
 
   List<CategoryItem> _getCategoriesByType(String type) {
@@ -50,10 +43,8 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     return Scaffold(
       backgroundColor: AppColor.background,
       body: SafeArea(
-        // ✅ 使用 GestureDetector 監聽點擊事件
         child: GestureDetector(
           onTap: () {
-            // ✅ 點擊空白區域時關閉鍵盤（收起輸入區域）
             _dismissKeyboard();
           },
           behavior: HitTestBehavior.opaque,
@@ -61,7 +52,8 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
             children: [
               _buildHeader(),
               _buildTypeTabs(),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+              // ✅ 移除獨立的日期選擇器，移到輸入區域
               Expanded(child: _buildCategoryGrid()),
               if (_showInputArea) ...[_buildInputArea()],
             ],
@@ -71,14 +63,56 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     );
   }
 
-  // ========== ✅ 關閉鍵盤方法 ==========
-  void _dismissKeyboard() {
-    // 如果鍵盤是開啟的，關閉它
-    if (_showInputArea) {
-      // 先取消焦點（如果有 TextField 在編輯）
-      FocusScope.of(context).unfocus();
+  // ========== 選擇日期 ==========
+// ========== 選擇日期（開放未來日期） ==========
+Future<void> _selectDate() async {
+  final BuildContext currentContext = context;
 
-      // 延遲一點點再關閉輸入區域，讓用戶看到過渡效果
+  if (!currentContext.mounted) {
+    return;
+  }
+
+  FocusScope.of(currentContext).unfocus();
+
+  // ✅ 可選擇範圍：2020年1月 ～ 未來 10 年
+  final DateTime now = DateTime.now();
+  final DateTime firstDate = DateTime(2020, 1);
+  final DateTime lastDate = DateTime(now.year + 10, 12, 31);
+
+  final DateTime? picked = await showDatePicker(
+    context: currentContext,
+    initialDate: _selectedDate,
+    firstDate: firstDate,
+    lastDate: lastDate,
+    builder: (context, child) {
+      return Theme(
+        data: ThemeData.light().copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColor.primary,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: Colors.black,
+          ),
+        ),
+        child: child!,
+      );
+    },
+  );
+
+  if (!currentContext.mounted) {
+    return;
+  }
+
+  if (picked != null) {
+    setState(() {
+      _selectedDate = picked;
+    });
+  }
+}
+
+  void _dismissKeyboard() {
+    if (_showInputArea) {
+      FocusScope.of(context).unfocus();
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
           setState(() {
@@ -89,7 +123,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     }
   }
 
-  // ========== 標題欄 ==========
   Widget _buildHeader() {
     return SizedBox(
       height: 44,
@@ -121,7 +154,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     );
   }
 
-  // ========== 類型選擇（支出/收入） ==========
   Widget _buildTypeTabs() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -155,9 +187,7 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
                       type,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.normal,
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                         color: isSelected ? AppColor.text : Colors.grey[400],
                       ),
                     ),
@@ -171,7 +201,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     );
   }
 
-  // ========== 分類網格（含新增按鈕） ==========
   Widget _buildCategoryGrid() {
     final categories = _currentCategories;
     final totalItems = categories.length + 1;
@@ -199,13 +228,14 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     );
   }
 
-  // ========== 新增分類按鈕 ==========
   Widget _buildAddCategoryButton() {
     return GestureDetector(
       onTap: () async {
         final result = await showDialog<bool>(
           context: context,
-          builder: (context) => AddCategoryDialog(type: _selectedType),
+          builder: (context) => AddCategoryDialog(
+            type: _selectedType,
+          ),
         );
         if (result == true) {
           setState(() {});
@@ -222,12 +252,19 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
               color: Colors.grey[800],
               border: Border.all(color: Colors.grey[600]!, width: 2),
             ),
-            child: const Icon(Icons.add, size: 28, color: AppColor.text),
+            child: const Icon(
+              Icons.add,
+              size: 28,
+              color: AppColor.text,
+            ),
           ),
           const SizedBox(height: 2),
           const Text(
             '新增',
-            style: TextStyle(fontSize: 10, color: AppColor.text),
+            style: TextStyle(
+              fontSize: 10,
+              color: AppColor.text,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -236,7 +273,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     );
   }
 
-  // ========== 分類項目 ==========
   Widget _buildCategoryItem(CategoryItem category, bool isSelected) {
     return GestureDetector(
       key: ValueKey('category_item_${category.name}'),
@@ -275,9 +311,7 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
                   style: TextStyle(
                     fontSize: 10,
                     color: isSelected ? AppColor.text : Colors.grey[400],
-                    fontWeight: isSelected
-                        ? FontWeight.w600
-                        : FontWeight.normal,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -298,7 +332,7 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     );
   }
 
-  // ========== 輸入區域 ==========
+  // ========== ✅ 輸入區域（備註 + 日期選擇器在同一行） ==========
   Widget _buildInputArea() {
     return Container(
       color: Colors.grey[900],
@@ -324,7 +358,7 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
                 ],
               ),
               Text(
-                '\$${_formatAmount(_amount)}',
+                _formatAmount(_amount),
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -334,6 +368,7 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
             ],
           ),
           const SizedBox(height: 4),
+          // ✅ 備註 + 日期選擇器在同一行
           Row(
             children: [
               const Icon(Icons.note_add, color: Colors.grey, size: 16),
@@ -354,6 +389,41 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
                   style: const TextStyle(color: AppColor.text, fontSize: 13),
                 ),
               ),
+              // ✅ 日期選擇器（在最右邊）
+              GestureDetector(
+                onTap: _selectDate,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800],
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.calendar_today,
+                        size: 14,
+                        color: AppColor.text,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${_selectedDate.month}/${_selectedDate.day}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColor.text,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_drop_down,
+                        size: 16,
+                        color: AppColor.text,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -365,7 +435,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     );
   }
 
-  // ========== 自定義數字鍵盤 ==========
   Widget _buildNumberPad() {
     return Column(
       children: [
@@ -478,7 +547,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     );
   }
 
-  // ========== 輔助方法 ==========
   IconData _getCategoryIcon() {
     final category = CategoryData.getCategory(_selectedCategory);
     return category?.icon ?? Icons.category;
@@ -493,7 +561,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
     );
   }
 
-  // ========== 儲存邏輯 ==========
   Future<void> _saveRecord() async {
     final BuildContext currentContext = context;
 
@@ -518,7 +585,7 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
       amount: finalAmount,
       category: _selectedCategory,
       note: _note.isEmpty ? '' : _note,
-      date: DateTime.now(),
+      date: _selectedDate,
       createdAt: DateTime.now(),
     );
 
