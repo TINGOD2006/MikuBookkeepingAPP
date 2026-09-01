@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-
 import 'constants/app_colors.dart';
+import 'constants/categories.dart';
 import 'screens/home_page.dart';
 import 'screens/bookkeeping_page.dart';
 import 'screens/analysis_page.dart';
@@ -9,7 +9,9 @@ import 'widgets/nav_item.dart';
 import 'widgets/add_record_dialog.dart';
 import 'services/storage_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await CategoryData.init();
   runApp(const MyApp());
 }
 
@@ -26,18 +28,16 @@ class MyApp extends StatelessWidget {
         brightness: Brightness.light,
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColor.primary,
-          foregroundColor: AppColor.text, //
+          foregroundColor: AppColor.text,
         ),
       ),
-      home: const MyHomePage(title: "Miku 記帳"),
+      home: const MyHomePage(),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
+  const MyHomePage({super.key});
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -78,7 +78,7 @@ class _MyHomePageState extends State<MyHomePage> {
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (context) => Scaffold(
-          backgroundColor: AppColor.cardBackground,
+          backgroundColor: AppColor.background,
           body: AddRecordDialog(
             onSave: (record) async {
               await _storage.addRecord(record);
@@ -92,21 +92,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ 主頁面不包含 AppBar，只包含 body 和底部導航
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(const SnackBar(content: Text('设置功能開發中')));
-            },
-          ),
-        ],
-      ),
-      body: _pages[_selectedIndex],
+      body: _pages[_selectedIndex], // 子頁面自己管理 AppBar
       floatingActionButton: Transform.translate(
         offset: const Offset(0, 25),
         child: Padding(
@@ -119,7 +107,11 @@ class _MyHomePageState extends State<MyHomePage> {
               backgroundColor: AppColor.primary,
               elevation: 4,
               shape: const CircleBorder(),
-              child: const Icon(Icons.add, color: AppColor.text, size: 30),
+              child: const Icon(
+                Icons.add,
+                color: AppColor.text,
+                size: 30,
+              ),
             ),
           ),
         ),

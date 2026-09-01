@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../models/record.dart';
 import '../constants/app_colors.dart';
 import '../services/storage_service.dart';
@@ -13,9 +12,13 @@ class HomePage extends StatefulWidget {
 }
 
 class HomePageState extends State<HomePage> {
-  List<Record> _records = [];
+  List<Record> _allRecords = []; // ✅ 所有記錄（不篩選）
+  List<Record> _filteredRecords = []; // ✅ 篩選後的記錄
   bool _isLoading = true;
   final StorageService _storage = StorageService();
+
+  // ✅ 篩選日期（null 表示顯示全部）
+  DateTime? _filterDate;
 
   @override
   void initState() {
@@ -28,10 +31,12 @@ class HomePageState extends State<HomePage> {
     setState(() => _isLoading = true);
 
     try {
-      _records = await _storage.loadRecords();
+      _allRecords = await _storage.loadRecords();
+      _applyFilter(); // ✅ 套用篩選
     } catch (e) {
       debugPrint('載入記錄失敗: $e');
-      _records = [];
+      _allRecords = [];
+      _filteredRecords = [];
     }
 
     if (mounted) {
@@ -39,26 +44,117 @@ class HomePageState extends State<HomePage> {
     }
   }
 
+  // ✅ 套用日期篩選
+  void _applyFilter() {
+    if (_filterDate == null) {
+      _filteredRecords = List.from(_allRecords);
+    } else {
+      final filterStr = _formatDate(_filterDate!);
+      _filteredRecords = _allRecords
+          .where((record) => record.formattedDate == filterStr)
+          .toList();
+    }
+  }
+
+  // ✅ 格式化日期為 yyyy/mm/dd
+  String _formatDate(DateTime date) {
+    return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
+  }
+
+  // ✅ 顯示日期選擇器
+// ========== 顯示日期選擇器 ==========
+Future<void> _pickDate() async {
+  final BuildContext currentContext = context;
+  
+  if (!currentContext.mounted) {
+    return;
+  }
+
+  FocusScope.of(currentContext).unfocus();
+  
+  await Future.delayed(const Duration(milliseconds: 100));
+
+  if (!currentContext.mounted) {
+    return;
+  }
+
+  final DateTime? picked = await showDatePicker(
+    context: currentContext,
+    initialDate: _filterDate ?? DateTime.now(),
+    firstDate: DateTime(2020),
+    lastDate: DateTime.now(),
+    builder: (context, child) {
+      return Theme(
+        data: ThemeData.light().copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColor.primary,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: Colors.black,
+          ),
+        ),
+        child: child!,
+      );
+    },
+  );
+
+  if (!currentContext.mounted) {
+    return;
+  }
+
+  if (picked != null) {
+    setState(() {
+      if (_filterDate != null && _formatDate(picked) == _formatDate(_filterDate!)) {
+        _filterDate = null;
+      } else {
+        _filterDate = picked;
+      }
+      _applyFilter();
+    });
+  }
+}
+
+// ========== 清除篩選 ==========
+void _clearFilter() {
+  if (!mounted) {
+    return;
+  }
+  
+  FocusScope.of(context).unfocus();
+  
+  setState(() {
+    _filterDate = null;
+    _applyFilter();
+  });
+}
+
   void refreshRecords() {
     _loadRecords();
   }
 
   Future<void> _deleteRecord(int index) async {
-    await _storage.deleteRecord(index);
-    _records.removeAt(index);
-    if (mounted) {
-      setState(() {});
+    // 從全部記錄中刪除
+    final recordToDelete = _filteredRecords[index];
+    final allIndex = _allRecords.indexOf(recordToDelete);
+    if (allIndex != -1) {
+      await _storage.deleteRecord(allIndex);
+      _allRecords.removeAt(allIndex);
+      _applyFilter();
+      if (mounted) {
+        setState(() {});
+      }
     }
   }
 
+  // ========== 統計數據（基於篩選後的記錄） ==========
   double get _totalExpense {
-    return _records
+    return _filteredRecords
         .where((record) => record.amount < 0)
         .fold(0, (sum, record) => sum + record.amount.abs());
   }
 
   double get _totalIncome {
-    return _records
+    return _filteredRecords
         .where((record) => record.amount > 0)
         .fold(0, (sum, record) => sum + record.amount);
   }
@@ -67,20 +163,10 @@ class HomePageState extends State<HomePage> {
     return _totalIncome - _totalExpense;
   }
 
-  double get _todayExpense {
-    final today = DateTime.now();
-    final todayStr =
-        '${today.year}/${today.month.toString().padLeft(2, '0')}/${today.day.toString().padLeft(2, '0')}';
-    return _records
-        .where(
-          (record) => record.formattedDate == todayStr && record.amount < 0,
-        )
-        .fold(0, (sum, record) => sum + record.amount.abs());
-  }
 
   Map<String, List<Record>> get _groupedRecords {
     final Map<String, List<Record>> groups = {};
-    for (final record in _records) {
+    for (final record in _filteredRecords) {
       final key = record.formattedDate;
       if (!groups.containsKey(key)) {
         groups[key] = [];
@@ -108,87 +194,204 @@ class HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColor.background,
-      child: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColor.primary),
-            )
-          : Column(
+    return Scaffold(
+      appBar: _buildAppBar(),
+      body: Container(
+        color: AppColor.background,
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: AppColor.primary,
+                ),
+              )
+            : Column(
+                children: [
+                  _buildSummaryCard(),
+                  // 顯示當前篩選狀態
+                  if (_filterDate != null) _buildFilterChip(),
+                  Expanded(
+                    child: _filteredRecords.isEmpty
+                        ? _buildEmptyState()
+                        : _buildRecordList(),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+ // ========== 自定義 AppBar（日期按鈕在最左邊 - 簡潔版） ==========
+PreferredSizeWidget _buildAppBar() {
+  return AppBar(
+    leading: IconButton(
+      icon: const Icon(Icons.calendar_today, color: AppColor.text),
+      onPressed: _pickDate,
+      tooltip: _filterDate == null ? '選擇日期' : '篩選: ${_formatDate(_filterDate!)}',
+    ),
+    title: const Text(
+      'Miku 記帳',
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+    centerTitle: true,
+    actions: [
+      IconButton(
+        icon: const Icon(Icons.settings),
+        onPressed: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('设置功能開發中')),
+          );
+        },
+      ),
+    ],
+  );
+}
+
+  // ========== 篩選狀態標籤 ==========
+  Widget _buildFilterChip() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColor.primary.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
               children: [
-                _buildSummaryCard(),
-                Expanded(
-                  child: _records.isEmpty
-                      ? _buildEmptyState()
-                      : _buildRecordList(),
+                const Icon(
+                  Icons.filter_alt,
+                  size: 14,
+                  color: AppColor.primary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '篩選: ${_formatDate(_filterDate!)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColor.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '(${_filteredRecords.length} 筆)',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColor.textSecondary,
+                  ),
                 ),
               ],
             ),
-    );
-  }
-
-  Widget _buildSummaryCard() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColor.primary, AppColor.secondary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppColor.primary.withValues(alpha: 0.3),
-            blurRadius: 10,
-            spreadRadius: 2,
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: _clearFilter,
+            child: const Text(
+              '清除篩選',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColor.textSecondary,
+              ),
+            ),
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          SummaryItem(label: '支出', amount: _totalExpense, color: AppColor.text),
-          Container(
-            width: 1,
-            height: 40,
-            color: AppColor.text.withValues(alpha: 0.2),
-          ),
-          SummaryItem(label: '收入', amount: _totalIncome, color: AppColor.text),
-          Container(
-            width: 1,
-            height: 40,
-            color: AppColor.text.withValues(alpha: 0.2),
-          ),
-          SummaryItem(label: '結餘', amount: _balance, color: AppColor.text),
-          Container(
-            width: 1,
-            height: 40,
-            color: AppColor.text.withValues(alpha: 0.2),
-          ),
-          SummaryItem(
-            label: '今日支出',
-            amount: _todayExpense,
+    );
+  }
+
+ Widget _buildSummaryCard() {
+  return Container(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    margin: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [AppColor.primary, AppColor.secondary],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: AppColor.primary.withValues(alpha: 0.3),
+          blurRadius: 10,
+          spreadRadius: 2,
+        ),
+      ],
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: SummaryItem(
+            label: '支出',
+            amount: _totalExpense,
             color: AppColor.text,
           ),
-        ],
-      ),
-    );
-  }
+        ),
+        Container(
+          width: 1,
+          height: 30,
+          color: AppColor.text.withValues(alpha: 0.2),
+        ),
+        Expanded(
+          child: SummaryItem(
+            label: '收入',
+            amount: _totalIncome,
+            color: AppColor.text,
+          ),
+        ),
+        Container(
+          width: 1,
+          height: 30,
+          color: AppColor.text.withValues(alpha: 0.2),
+        ),
+        Expanded(
+          child: SummaryItem(
+            label: '結餘',
+            amount: _balance,
+            color: AppColor.text,
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildEmptyState() {
-    return const Center(
+    String message = '尚無記帳記錄';
+    String subMessage = '點擊 ✚ 按鈕新增記錄';
+    if (_filterDate != null) {
+      message = '${_formatDate(_filterDate!)} 尚無記錄';
+      subMessage = '點擊日期按鈕查看全部';
+    }
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inbox, size: 64, color: AppColor.textSecondary),
-          SizedBox(height: 16),
-          Text('尚無記帳記錄', style: TextStyle(fontSize: 18, color: AppColor.text)),
-          SizedBox(height: 8),
+          Icon(
+            _filterDate == null ? Icons.inbox : Icons.calendar_today,
+            size: 64,
+            color: AppColor.textSecondary,
+          ),
+          const SizedBox(height: 16),
           Text(
-            '點擊 ✚ 按鈕新增記錄',
-            style: TextStyle(fontSize: 14, color: AppColor.textSecondary),
+            message,
+            style: const TextStyle(
+              fontSize: 18,
+              color: AppColor.text,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subMessage,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColor.textSecondary,
+            ),
           ),
         ],
       ),
@@ -220,12 +423,7 @@ class HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildDateHeader(
-    String date,
-    double dailyExpense,
-    double dailyIncome,
-    double dailyTotal,
-  ) {
+  Widget _buildDateHeader(String date, double dailyExpense, double dailyIncome, double dailyTotal) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -235,14 +433,14 @@ class HomePageState extends State<HomePage> {
             children: [
               Icon(
                 Icons.calendar_today,
-                size: 16,
+                size: 12,
                 color: AppColor.textSecondary,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 5),
               Text(
                 date,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 12,
                   fontWeight: FontWeight.bold,
                   color: AppColor.text,
                 ),
@@ -250,10 +448,10 @@ class HomePageState extends State<HomePage> {
             ],
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: AppColor.primary.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(12),
+              color: AppColor.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               children: [
@@ -261,7 +459,7 @@ class HomePageState extends State<HomePage> {
                   Text(
                     '⬇ \$${dailyExpense.toStringAsFixed(0)}',
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 10,
                       color: AppColor.text,
                       fontWeight: FontWeight.w600,
                     ),
@@ -278,11 +476,11 @@ class HomePageState extends State<HomePage> {
                     ),
                   ),
                 if (dailyExpense > 0 || dailyIncome > 0)
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 3),
                 Text(
                   '淨額 \$${dailyTotal.abs().toStringAsFixed(0)}',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 10,
                     color: AppColor.text,
                     fontWeight: FontWeight.w600,
                   ),
@@ -300,15 +498,14 @@ class HomePageState extends State<HomePage> {
       final localIndex = entry.key;
       final record = entry.value;
 
-      final uniqueKey =
-          '${record.date.millisecondsSinceEpoch}_'
+      final uniqueKey = '${record.date.millisecondsSinceEpoch}_'
           '${record.category}_'
           '${record.amount}_'
           '${record.note}_'
           '${record.createdAt.millisecondsSinceEpoch}_'
           '$localIndex';
 
-      final globalIndex = _records.indexOf(record);
+      final globalIndex = _filteredRecords.indexOf(record);
 
       return Dismissible(
         key: Key('dismissible_$uniqueKey'),
@@ -416,7 +613,10 @@ class HomePageState extends State<HomePage> {
                       ),
                       child: Text(
                         record.formattedTime,
-                        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[600],
+                        ),
                       ),
                     ),
                   ],
@@ -424,7 +624,10 @@ class HomePageState extends State<HomePage> {
                 const SizedBox(height: 2),
                 Text(
                   record.note,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -437,8 +640,7 @@ class HomePageState extends State<HomePage> {
               Text(
                 isExpense
                     ? '-\$${displayAmount.toStringAsFixed(0)}'
-                    : //支出加負號
-                      '\$${displayAmount.toStringAsFixed(0)}',
+                    : '\$${displayAmount.toStringAsFixed(0)}',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -448,7 +650,10 @@ class HomePageState extends State<HomePage> {
               if (record.createdAt.day != record.date.day)
                 Text(
                   '建立: ${record.formattedTime}',
-                  style: TextStyle(fontSize: 10, color: Colors.grey[400]),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey[400],
+                  ),
                 ),
             ],
           ),
@@ -460,7 +665,10 @@ class HomePageState extends State<HomePage> {
   Widget _buildDivider() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Divider(color: Colors.grey[800], thickness: 1),
+      child: Divider(
+        color: Colors.grey[800],
+        thickness: 1,
+      ),
     );
   }
 }

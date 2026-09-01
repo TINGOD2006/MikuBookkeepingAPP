@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-
 import '../constants/app_colors.dart';
 import '../constants/categories.dart';
 
 class AddCategoryDialog extends StatefulWidget {
-  final String type; // '支出' 或 '收入'
+  final String type;
 
-  const AddCategoryDialog({super.key, required this.type});
+  const AddCategoryDialog({
+    super.key,
+    required this.type,
+  });
 
   @override
   State<AddCategoryDialog> createState() => _AddCategoryDialogState();
@@ -17,7 +19,6 @@ class _AddCategoryDialogState extends State<AddCategoryDialog> {
   Color _selectedColor = Colors.grey;
   IconData _selectedIcon = Icons.label;
 
-  // ✅ 預設顏色選項
   final List<Color> _colorOptions = [
     Colors.red,
     Colors.pink,
@@ -40,7 +41,6 @@ class _AddCategoryDialogState extends State<AddCategoryDialog> {
     Colors.blueGrey,
   ];
 
-  // ✅ 預設圖標選項
   final List<IconData> _iconOptions = [
     Icons.label,
     Icons.star,
@@ -83,106 +83,112 @@ class _AddCategoryDialogState extends State<AddCategoryDialog> {
         '新增自定義分類 (${widget.type})',
         style: const TextStyle(color: AppColor.text),
       ),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 名稱輸入
-            TextField(
-              controller: _nameController,
-              style: const TextStyle(color: AppColor.text),
-              decoration: InputDecoration(
-                hintText: '請輸入分類名稱',
-                hintStyle: TextStyle(color: Colors.grey[400]),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey[600]!),
+      // ✅ 使用 ConstrainedBox 限制最大高度，並使用 SingleChildScrollView
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.6,
+          maxWidth: 400,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 名稱輸入
+              TextField(
+                controller: _nameController,
+                style: const TextStyle(color: AppColor.text),
+                decoration: InputDecoration(
+                  hintText: '請輸入分類名稱',
+                  hintStyle: TextStyle(color: Colors.grey[400]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey[600]!),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey[600]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColor.primary),
+                  ),
+                  prefixIcon: Icon(_selectedIcon, color: _selectedColor),
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey[600]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColor.primary),
-                ),
-                prefixIcon: Icon(_selectedIcon, color: _selectedColor),
               ),
-            ),
-            const SizedBox(height: 16),
-            // 顏色選擇
-            const Text(
-              '選擇顏色',
-              style: TextStyle(color: AppColor.text, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _colorOptions.map((color) {
-                final isSelected = _selectedColor == color;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedColor = color;
-                    });
-                  },
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      border: isSelected
-                          ? Border.all(color: AppColor.text, width: 2)
+              const SizedBox(height: 16),
+              // 顏色選擇
+              const Text(
+                '選擇顏色',
+                style: TextStyle(color: AppColor.text, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _colorOptions.map((color) {
+                  final isSelected = _selectedColor == color;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedColor = color;
+                      });
+                    },
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: isSelected
+                            ? Border.all(color: AppColor.text, width: 2)
+                            : null,
+                      ),
+                      child: isSelected
+                          ? const Icon(Icons.check, color: Colors.white, size: 16)
                           : null,
                     ),
-                    child: isSelected
-                        ? const Icon(Icons.check, color: Colors.white, size: 16)
-                        : null,
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-            // 圖標選擇
-            const Text(
-              '選擇圖標',
-              style: TextStyle(color: AppColor.text, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _iconOptions.map((icon) {
-                final isSelected = _selectedIcon == icon;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedIcon = icon;
-                    });
-                  },
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColor.primary : Colors.grey[800],
-                      borderRadius: BorderRadius.circular(8),
-                      border: isSelected
-                          ? Border.all(color: AppColor.text, width: 1)
-                          : null,
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              // 圖標選擇
+              const Text(
+                '選擇圖標',
+                style: TextStyle(color: AppColor.text, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _iconOptions.map((icon) {
+                  final isSelected = _selectedIcon == icon;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedIcon = icon;
+                      });
+                    },
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColor.primary : Colors.grey[800],
+                        borderRadius: BorderRadius.circular(8),
+                        border: isSelected
+                            ? Border.all(color: AppColor.text, width: 1)
+                            : null,
+                      ),
+                      child: Icon(
+                        icon,
+                        color: isSelected ? AppColor.text : Colors.grey[400],
+                        size: 24,
+                      ),
                     ),
-                    child: Icon(
-                      icon,
-                      color: isSelected ? AppColor.text : Colors.grey[400],
-                      size: 24,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -196,7 +202,9 @@ class _AddCategoryDialogState extends State<AddCategoryDialog> {
           onPressed: () {
             _saveCategory();
           },
-          style: ElevatedButton.styleFrom(backgroundColor: AppColor.primary),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColor.primary,
+          ),
           child: const Text('新增'),
         ),
       ],
@@ -216,7 +224,6 @@ class _AddCategoryDialogState extends State<AddCategoryDialog> {
       return;
     }
 
-    // ✅ 檢查是否已存在同名分類
     final existingCategories = CategoryData.getCategories(widget.type);
     for (final category in existingCategories) {
       if (category.name == name) {
@@ -231,7 +238,6 @@ class _AddCategoryDialogState extends State<AddCategoryDialog> {
       }
     }
 
-    // ✅ 新增分類
     CategoryData.addCustomCategory(
       widget.type,
       name,
@@ -239,7 +245,7 @@ class _AddCategoryDialogState extends State<AddCategoryDialog> {
       color: _selectedColor,
     );
 
-    Navigator.pop(context, true); // 返回 true 表示新增成功
+    Navigator.pop(context, true);
   }
 
   @override
