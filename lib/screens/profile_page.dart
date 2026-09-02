@@ -1,48 +1,691 @@
-import 'package:flutter/material.dart';
-import '../constants/app_colors.dart';
+import 'dart:io';
 
-class ProfilePage extends StatelessWidget {
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../constants/app_colors.dart';
+import '../services/storage_service.dart';
+
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  final StorageService _storage = StorageService();
+
+  String _userName = '用戶名稱';
+  String _userEmail = 'user@example.com';
+  String? _avatarPath;
+
+  int _totalRecords = 0;
+  double _totalExpense = 0;
+  double _totalIncome = 0;
+
+  bool _isLoading = true;
+
+  final ImagePicker _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+    _loadStatistics();
+  }
+
+  // ========== 載入用戶資料 ==========
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _userName = prefs.getString('user_name') ?? '用戶名稱';
+        _userEmail = prefs.getString('user_email') ?? 'user@example.com';
+        _avatarPath = prefs.getString('avatar_path');
+      });
+    }
+  }
+
+  // ========== 載入統計數據 ==========
+  Future<void> _loadStatistics() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final records = await _storage.loadRecords();
+
+      double expense = 0;
+      double income = 0;
+
+      for (final record in records) {
+        if (record.amount < 0) {
+          expense += record.amount.abs();
+        } else {
+          income += record.amount;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _totalRecords = records.length;
+          _totalExpense = expense;
+          _totalIncome = income;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // ========== 更換頭像 ==========
+  Future<void> _changeAvatar(ImageSource source) async {
+    final BuildContext currentContext = context;
+
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: source,
+        maxWidth: 300,
+        maxHeight: 300,
+        imageQuality: 80,
+      );
+
+      if (image == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('avatar_path', image.path);
+
+      if (!currentContext.mounted) return;
+
+      setState(() {
+        _avatarPath = image.path;
+      });
+
+      // ✅ 使用 currentContext.mounted 保護 ScaffoldMessenger
+      if (currentContext.mounted) {
+        ScaffoldMessenger.of(currentContext).showSnackBar(
+          const SnackBar(
+            content: Text('頭像已更新 ✅'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!currentContext.mounted) return;
+
+      if (currentContext.mounted) {
+        ScaffoldMessenger.of(currentContext).showSnackBar(
+          SnackBar(
+            content: Text('更新頭像失敗: $e'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // ========== 顯示頭像選擇對話框 ==========
+  void _showAvatarPicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      backgroundColor: Colors.grey[900],
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[600],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '選擇頭像',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColor.text,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildPickerOption(
+                      icon: Icons.photo_library,
+                      label: '從相簿選擇',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _changeAvatar(ImageSource.gallery);
+                      },
+                    ),
+                    _buildPickerOption(
+                      icon: Icons.camera_alt,
+                      label: '拍照',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _changeAvatar(ImageSource.camera);
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPickerOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: AppColor.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: AppColor.primary, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppColor.text),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ========== 編輯用戶名稱 ==========
+  Future<void> _editName() async {
+    final TextEditingController controller = TextEditingController(
+      text: _userName,
+    );
+    final BuildContext currentContext = context;
+
+    final result = await showDialog<bool>(
+      context: currentContext,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColor.background,
+          title: const Text('編輯名稱', style: TextStyle(color: AppColor.text)),
+          content: TextField(
+            controller: controller,
+            style: const TextStyle(color: AppColor.text),
+            decoration: InputDecoration(
+              hintText: '請輸入名稱',
+              hintStyle: TextStyle(color: Colors.grey[400]),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey[600]!),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey[600]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: AppColor.primary),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColor.primary,
+              ),
+              child: const Text('儲存'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!currentContext.mounted) return;
+
+    if (result == true && controller.text.trim().isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_name', controller.text.trim());
+
+      setState(() {
+        _userName = controller.text.trim();
+      });
+
+      // ✅ 使用 currentContext.mounted 保護 ScaffoldMessenger
+      if (currentContext.mounted) {
+        ScaffoldMessenger.of(currentContext).showSnackBar(
+          const SnackBar(
+            content: Text('名稱已更新 ✅'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+
+    controller.dispose();
+  }
+
+  // ========== 編輯用戶郵箱 ==========
+  Future<void> _editEmail() async {
+    final TextEditingController controller = TextEditingController(
+      text: _userEmail,
+    );
+    final BuildContext currentContext = context;
+
+    final result = await showDialog<bool>(
+      context: currentContext,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColor.background,
+          title: const Text('編輯郵箱', style: TextStyle(color: AppColor.text)),
+          content: TextField(
+            controller: controller,
+            style: const TextStyle(color: AppColor.text),
+            decoration: InputDecoration(
+              hintText: '請輸入郵箱',
+              hintStyle: TextStyle(color: Colors.grey[400]),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey[600]!),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey[600]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: AppColor.primary),
+              ),
+            ),
+            keyboardType: TextInputType.emailAddress,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColor.primary,
+              ),
+              child: const Text('儲存'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!currentContext.mounted) return;
+
+    if (result == true && controller.text.trim().isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_email', controller.text.trim());
+
+      setState(() {
+        _userEmail = controller.text.trim();
+      });
+
+      // ✅ 使用 currentContext.mounted 保護 ScaffoldMessenger
+      if (currentContext.mounted) {
+        ScaffoldMessenger.of(currentContext).showSnackBar(
+          const SnackBar(
+            content: Text('郵箱已更新 ✅'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+
+    controller.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ✅ 加入 ProfilePage 專屬的 AppBar
       appBar: AppBar(
         title: const Text('我的'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadStatistics,
+          ),
+        ],
       ),
       body: Container(
         color: AppColor.background,
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircleAvatar(
-                radius: 50,
-                backgroundColor: AppColor.primary,
-                child: Icon(Icons.person, size: 50, color: Colors.white),
-              ),
-              SizedBox(height: 16),
-              Text(
-                '用户名称',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColor.text,
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColor.primary),
+              )
+            : SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    _buildAvatarSection(),
+                    const SizedBox(height: 24),
+                    _buildProfileCard(),
+                    const SizedBox(height: 16),
+                    _buildStatisticsCard(),
+                    const SizedBox(height: 16),
+                    _buildSettingsCard(),
+                    const SizedBox(height: 20),
+                  ],
                 ),
               ),
-              SizedBox(height: 8),
-              Text(
-                'user@example.com',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: AppColor.textSecondary,
+      ),
+    );
+  }
+
+  // ========== 頭像區域 ==========
+  Widget _buildAvatarSection() {
+    return GestureDetector(
+      onTap: _showAvatarPicker,
+      child: Column(
+        children: [
+          Stack(
+            children: [
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.grey[800],
+                  border: Border.all(color: AppColor.primary, width: 3),
+                ),
+                child: ClipOval(
+                  child: _avatarPath != null && File(_avatarPath!).existsSync()
+                      ? Image.file(
+                          File(_avatarPath!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return _buildDefaultAvatar();
+                          },
+                        )
+                      : _buildDefaultAvatar(),
+                ),
+              ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColor.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.camera_alt,
+                    color: AppColor.text,
+                    size: 16,
+                  ),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Text(
+            '點擊更換頭像',
+            style: TextStyle(fontSize: 12, color: AppColor.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDefaultAvatar() {
+    return Container(
+      color: Colors.grey[800],
+      child: const Icon(Icons.person, size: 50, color: AppColor.textSecondary),
+    );
+  }
+
+  // ========== 個人資料卡片 ==========
+  Widget _buildProfileCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          _buildProfileItem(
+            icon: Icons.person_outline,
+            label: '名稱',
+            value: _userName,
+            onTap: _editName,
+          ),
+          const Divider(color: Colors.grey, height: 1),
+          _buildProfileItem(
+            icon: Icons.email_outlined,
+            label: '郵箱',
+            value: _userEmail,
+            onTap: _editEmail,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColor.primary, size: 20),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColor.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                value,
+                style: const TextStyle(fontSize: 14, color: AppColor.text),
+                textAlign: TextAlign.right,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColor.textSecondary,
+              size: 20,
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  // ========== 統計卡片 ==========
+  Widget _buildStatisticsCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '統計概覽',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColor.text,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildStatItem(
+                label: '總支出',
+                value: '\$${_totalExpense.toStringAsFixed(0)}',
+                color: Colors.redAccent,
+              ),
+              _buildStatItem(
+                label: '總收入',
+                value: '\$${_totalIncome.toStringAsFixed(0)}',
+                color: Colors.greenAccent,
+              ),
+              _buildStatItem(
+                label: '記錄筆數',
+                value: '$_totalRecords',
+                color: AppColor.primary,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem({
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppColor.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ========== 設定選項 ==========
+  Widget _buildSettingsCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '設定',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColor.text,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildSettingsItem(
+            icon: Icons.notifications_outlined,
+            label: '預算提醒',
+            trailing: Switch(
+              value: true,
+              onChanged: (value) {},
+              activeThumbColor: AppColor.primary,
+            ),
+          ),
+          _buildSettingsItem(
+            icon: Icons.lock_outline,
+            label: '隱私設定',
+            trailing: const Icon(
+              Icons.chevron_right,
+              color: AppColor.textSecondary,
+            ),
+          ),
+          _buildSettingsItem(
+            icon: Icons.info_outline,
+            label: '關於',
+            trailing: const Icon(
+              Icons.chevron_right,
+              color: AppColor.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsItem({
+    required IconData icon,
+    required String label,
+    required Widget trailing,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColor.primary, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 14, color: AppColor.text),
+            ),
+          ),
+          trailing,
+        ],
       ),
     );
   }
