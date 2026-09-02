@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../constants/app_colors.dart';
 
 class NavItem extends StatelessWidget {
@@ -17,25 +18,34 @@ class NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? AppColor.primary : Colors.grey,
-            size: 28,
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        splashColor: AppColor.primary.withValues(alpha: 0.3),
+        highlightColor: AppColor.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? AppColor.primary : AppColor.textSecondary,
+                size: 28,
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isSelected ? AppColor.primary : AppColor.textSecondary,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: isSelected ? AppColor.primary : Colors.grey,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

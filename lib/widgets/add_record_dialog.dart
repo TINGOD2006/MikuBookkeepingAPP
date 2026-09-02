@@ -53,7 +53,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
               _buildHeader(),
               _buildTypeTabs(),
               const SizedBox(height: 8),
-              // ✅ 移除獨立的日期選擇器，移到輸入區域
               Expanded(child: _buildCategoryGrid()),
               if (_showInputArea) ...[_buildInputArea()],
             ],
@@ -64,7 +63,6 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
   }
 
   // ========== 選擇日期 ==========
-// ========== 選擇日期（開放未來日期） ==========
 Future<void> _selectDate() async {
   final BuildContext currentContext = context;
 
@@ -73,8 +71,6 @@ Future<void> _selectDate() async {
   }
 
   FocusScope.of(currentContext).unfocus();
-
-  // ✅ 可選擇範圍：2020年1月 ～ 未來 10 年
   final DateTime now = DateTime.now();
   final DateTime firstDate = DateTime(2020, 1);
   final DateTime lastDate = DateTime(now.year + 10, 12, 31);

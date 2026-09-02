@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+
 import '../models/record.dart';
 import '../constants/app_colors.dart';
-import '../constants/categories.dart'; // ✅ 導入分類
+import '../constants/categories.dart'; //
 import '../services/storage_service.dart';
+import '../widgets/month_picker_dialog.dart'; //
 
 class BookkeepingPage extends StatefulWidget {
   const BookkeepingPage({super.key});
@@ -48,7 +50,9 @@ class BookkeepingPageState extends State<BookkeepingPage> {
     final monthEnd = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
 
     _filteredRecords = _allRecords.where((record) {
-      return record.date.isAfter(monthStart.subtract(const Duration(days: 1))) &&
+      return record.date.isAfter(
+            monthStart.subtract(const Duration(days: 1)),
+          ) &&
           record.date.isBefore(monthEnd);
     }).toList();
   }
@@ -62,24 +66,9 @@ class BookkeepingPageState extends State<BookkeepingPage> {
 
     FocusScope.of(currentContext).unfocus();
 
-    final DateTime? picked = await showDatePicker(
+    final DateTime? picked = await showDialog<DateTime>(
       context: currentContext,
-      initialDate: _selectedMonth,
-      firstDate: DateTime(2020, 1),
-      lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColor.primary,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      builder: (context) => MonthPickerDialog(initialDate: _selectedMonth),
     );
 
     if (!currentContext.mounted) {
@@ -163,9 +152,7 @@ class BookkeepingPageState extends State<BookkeepingPage> {
         color: AppColor.background,
         child: _isLoading
             ? const Center(
-                child: CircularProgressIndicator(
-                  color: AppColor.primary,
-                ),
+                child: CircularProgressIndicator(color: AppColor.primary),
               )
             : Column(
                 children: [
@@ -185,19 +172,15 @@ class BookkeepingPageState extends State<BookkeepingPage> {
     return AppBar(
       title: const Text(
         'Miku 記帳',
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
       ),
       centerTitle: true,
       actions: [
         IconButton(
           icon: const Icon(Icons.settings),
           onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('设置功能開發中')),
-            );
+            ScaffoldMessenger.of(context)
+                .showSnackBar(const SnackBar(content: Text('设置功能開發中')));
           },
         ),
       ],
@@ -319,26 +302,16 @@ class BookkeepingPageState extends State<BookkeepingPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.inbox,
-            size: 64,
-            color: AppColor.textSecondary,
-          ),
+          Icon(Icons.inbox, size: 64, color: AppColor.textSecondary),
           const SizedBox(height: 16),
           Text(
             '${_selectedMonth.year.toString()}年${_selectedMonth.month.toString().padLeft(2, '0')}月 尚無記錄',
-            style: const TextStyle(
-              fontSize: 18,
-              color: AppColor.text,
-            ),
+            style: const TextStyle(fontSize: 18, color: AppColor.text),
           ),
           const SizedBox(height: 8),
           const Text(
             '點擊 ✚ 按鈕新增記錄',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColor.textSecondary,
-            ),
+            style: TextStyle(fontSize: 14, color: AppColor.textSecondary),
           ),
         ],
       ),
@@ -370,7 +343,12 @@ class BookkeepingPageState extends State<BookkeepingPage> {
     );
   }
 
-  Widget _buildDateHeader(String date, double dailyExpense, double dailyIncome, double dailyTotal) {
+  Widget _buildDateHeader(
+    String date,
+    double dailyExpense,
+    double dailyIncome,
+    double dailyTotal,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -425,11 +403,7 @@ class BookkeepingPageState extends State<BookkeepingPage> {
                   ),
                 if (dailyExpense > 0 || dailyIncome > 0) ...[
                   const SizedBox(width: 2),
-                  Container(
-                    width: 1,
-                    height: 10,
-                    color: Colors.grey[600],
-                  ),
+                  Container(width: 1, height: 10, color: Colors.grey[600]),
                   const SizedBox(width: 2),
                 ],
                 Text(
@@ -437,7 +411,9 @@ class BookkeepingPageState extends State<BookkeepingPage> {
                   style: TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w600,
-                    color: dailyTotal < 0 ? Colors.redAccent : Colors.greenAccent,
+                    color: dailyTotal < 0
+                        ? Colors.redAccent
+                        : Colors.greenAccent,
                   ),
                 ),
               ],
@@ -453,7 +429,8 @@ class BookkeepingPageState extends State<BookkeepingPage> {
       final localIndex = entry.key;
       final record = entry.value;
 
-      final uniqueKey = '${record.date.millisecondsSinceEpoch}_'
+      final uniqueKey =
+          '${record.date.millisecondsSinceEpoch}_'
           '${record.category}_'
           '${record.amount}_'
           '${record.note}_'
@@ -518,13 +495,7 @@ class BookkeepingPageState extends State<BookkeepingPage> {
               color: iconColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Center(
-              child: Icon(
-                icon,
-                size: 20,
-                color: iconColor,
-              ),
-            ),
+            child: Center(child: Icon(icon, size: 20, color: iconColor)),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -565,10 +536,7 @@ class BookkeepingPageState extends State<BookkeepingPage> {
                 const SizedBox(height: 1),
                 Text(
                   record.note,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -593,10 +561,7 @@ class BookkeepingPageState extends State<BookkeepingPage> {
   Widget _buildDivider() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Divider(
-        color: Colors.grey[800],
-        thickness: 0.5,
-      ),
+      child: Divider(color: Colors.grey[800], thickness: 0.5),
     );
   }
 }

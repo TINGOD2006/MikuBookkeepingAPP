@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'constants/app_colors.dart';
 import 'constants/categories.dart';
 import 'screens/bookkeeping_page.dart';
@@ -46,7 +47,8 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
   static const double _bottomNavBarHeight = 72;
-  final GlobalKey<BookkeepingPageState> _bookkeepingPageKey = GlobalKey<BookkeepingPageState>();
+  final GlobalKey<BookkeepingPageState> _bookkeepingPageKey =
+      GlobalKey<BookkeepingPageState>();
   late List<Widget> _pages;
   final StorageService _storage = StorageService();
 
@@ -106,11 +108,7 @@ class _MyHomePageState extends State<MyHomePage> {
               backgroundColor: AppColor.primary,
               elevation: 4,
               shape: const CircleBorder(),
-              child: const Icon(
-                Icons.add,
-                color: AppColor.text,
-                size: 30,
-              ),
+              child: const Icon(Icons.add, color: AppColor.text, size: 30),
             ),
           ),
         ),
@@ -136,7 +134,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 isSelected: _selectedIndex == 1,
                 onTap: () => _onItemTapped(1),
               ),
-              const SizedBox(width: 40),
+              const SizedBox(width: 90),
               NavItem(
                 icon: Icons.analytics,
                 label: '分析',
