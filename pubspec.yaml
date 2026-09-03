@@ -8,6 +8,10 @@ environment:
   sdk: ^3.13.1
 
 dependencies:
+  flutter_local_notifications: ^17.0.0
+  http: ^1.2.0
+  permission_handler: ^11.3.0
+  notification_listener_service: ^1.0.0
   shared_preferences: ^2.2.2
   logger: ^2.0.0
   flutter:

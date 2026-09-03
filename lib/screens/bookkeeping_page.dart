@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../models/record.dart';
 import '../constants/app_colors.dart';
-import '../constants/categories.dart'; //
+import '../constants/categories.dart';
 import '../services/storage_service.dart';
-import '../widgets/month_picker_dialog.dart'; //
+import '../widgets/month_picker_dialog.dart';
 
 class BookkeepingPage extends StatefulWidget {
   const BookkeepingPage({super.key});
@@ -21,10 +21,23 @@ class BookkeepingPageState extends State<BookkeepingPage> {
 
   DateTime _selectedMonth = DateTime.now();
 
+  // ✅ 搜尋相關
+  bool _isSearching = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
     _loadRecords();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
   }
 
   Future<void> _loadRecords() async {
@@ -45,16 +58,66 @@ class BookkeepingPageState extends State<BookkeepingPage> {
     }
   }
 
+  // ========== 套用月份和搜尋篩選 ==========
   void _applyFilter() {
+    // 1. 按月份過濾
     final monthStart = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
     final monthEnd = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
 
-    _filteredRecords = _allRecords.where((record) {
+    List<Record> monthRecords = _allRecords.where((record) {
       return record.date.isAfter(
             monthStart.subtract(const Duration(days: 1)),
           ) &&
           record.date.isBefore(monthEnd);
     }).toList();
+
+    // 2. 如果有搜尋關鍵字，再按搜尋過濾
+    if (_searchQuery.trim().isNotEmpty) {
+      final query = _searchQuery.trim().toLowerCase();
+      _filteredRecords = monthRecords.where((record) {
+        final categoryMatch = record.category.toLowerCase().contains(query);
+        final noteMatch = record.note.toLowerCase().contains(query);
+        return categoryMatch || noteMatch;
+      }).toList();
+    } else {
+      _filteredRecords = monthRecords;
+    }
+  }
+
+  // ========== 切換搜尋模式 ==========
+  void _toggleSearch() {
+    setState(() {
+      _isSearching = !_isSearching;
+      if (!_isSearching) {
+        _searchQuery = '';
+        _searchController.clear();
+        _applyFilter();
+        _searchFocusNode.unfocus();
+      } else {
+        // 延遲聚焦，讓動畫完成
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _searchFocusNode.requestFocus();
+        });
+      }
+    });
+  }
+
+  // ========== 清除搜尋 ==========
+  void _clearSearch() {
+    setState(() {
+      _searchQuery = '';
+      _searchController.clear();
+      _applyFilter();
+      _searchFocusNode.unfocus();
+    });
+  }
+
+  // ========== 執行搜尋 ==========
+  void _performSearch(String query) {
+    setState(() {
+      _searchQuery = query;
+      _applyFilter();
+    });
   }
 
   Future<void> _selectMonth() async {
@@ -63,8 +126,6 @@ class BookkeepingPageState extends State<BookkeepingPage> {
     if (!currentContext.mounted) {
       return;
     }
-
-    FocusScope.of(currentContext).unfocus();
 
     final DateTime? picked = await showDialog<DateTime>(
       context: currentContext,
@@ -157,6 +218,8 @@ class BookkeepingPageState extends State<BookkeepingPage> {
             : Column(
                 children: [
                   _buildMonthAndSummaryCard(),
+                  // ✅ 搜尋結果提示
+                  if (_searchQuery.trim().isNotEmpty) _buildSearchResultInfo(),
                   Expanded(
                     child: _filteredRecords.isEmpty
                         ? _buildEmptyState()
@@ -168,7 +231,58 @@ class BookkeepingPageState extends State<BookkeepingPage> {
     );
   }
 
+  // ========== 自定義 AppBar（含搜尋功能） ==========
   PreferredSizeWidget _buildAppBar() {
+    if (_isSearching) {
+      // ✅ 搜尋模式下的 AppBar
+      return AppBar(
+        title: TextField(
+          controller: _searchController,
+          focusNode: _searchFocusNode,
+          style: const TextStyle(color: AppColor.text, fontSize: 16),
+          decoration: InputDecoration(
+            hintText: '搜尋分類或備註...',
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 16),
+            border: InputBorder.none,
+            prefixIcon: const Icon(Icons.search, color: AppColor.text),
+            suffixIcon: _searchController.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(
+                      Icons.clear,
+                      color: AppColor.text,
+                      size: 20,
+                    ),
+                    onPressed: _clearSearch,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                    ),
+                  )
+                : null,
+          ),
+          onChanged: _performSearch,
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _toggleSearch,
+        ),
+        actions: [
+          if (_searchController.text.isNotEmpty)
+            TextButton(
+              onPressed: _clearSearch,
+              child: const Text(
+                '清除',
+                style: TextStyle(color: AppColor.text, fontSize: 14),
+              ),
+            ),
+        ],
+        backgroundColor: AppColor.primary,
+        foregroundColor: AppColor.text,
+      );
+    }
+
+    // ✅ 正常模式下的 AppBar
     return AppBar(
       title: const Text(
         'Miku 記帳',
@@ -176,17 +290,45 @@ class BookkeepingPageState extends State<BookkeepingPage> {
       ),
       centerTitle: true,
       actions: [
+        // ✅ 搜尋按鈕（取代設定）
         IconButton(
-          icon: const Icon(Icons.settings),
-          onPressed: () {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('设置功能開發中')));
-          },
+          icon: const Icon(Icons.search),
+          onPressed: _toggleSearch,
+          tooltip: '搜尋記錄',
         ),
       ],
     );
   }
 
+  // ========== 搜尋結果資訊 ==========
+  Widget _buildSearchResultInfo() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: AppColor.primary.withValues(alpha: 0.1),
+      child: Row(
+        children: [
+          const Icon(Icons.search, size: 16, color: AppColor.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '找到 ${_filteredRecords.length} 筆記錄 (關鍵字: "$_searchQuery")',
+              style: const TextStyle(fontSize: 13, color: AppColor.text),
+            ),
+          ),
+          GestureDetector(
+            onTap: _clearSearch,
+            child: const Icon(
+              Icons.close,
+              size: 16,
+              color: AppColor.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ========== 月份選擇器 + 金額卡片 ==========
   Widget _buildMonthAndSummaryCard() {
     return Container(
       margin: const EdgeInsets.all(10),
@@ -215,7 +357,7 @@ class BookkeepingPageState extends State<BookkeepingPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '${_selectedMonth.year.toString()}年',
+                    '${_selectedMonth.year}',
                     style: const TextStyle(
                       fontSize: 10,
                       color: AppColor.text,
@@ -223,7 +365,7 @@ class BookkeepingPageState extends State<BookkeepingPage> {
                     ),
                   ),
                   Text(
-                    '${_selectedMonth.month.toString().padLeft(2, '0')}月',
+                    '${_selectedMonth.month}月',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -298,14 +440,22 @@ class BookkeepingPageState extends State<BookkeepingPage> {
   }
 
   Widget _buildEmptyState() {
+    String message = '${_selectedMonth.year}年${_selectedMonth.month}月 尚無記錄';
+    if (_searchQuery.trim().isNotEmpty) {
+      message = '找不到 "$_searchQuery" 相關的記錄';
+    }
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inbox, size: 64, color: AppColor.textSecondary),
+          Icon(
+            _searchQuery.trim().isNotEmpty ? Icons.search_off : Icons.inbox,
+            size: 64,
+            color: AppColor.textSecondary,
+          ),
           const SizedBox(height: 16),
           Text(
-            '${_selectedMonth.year.toString()}年${_selectedMonth.month.toString().padLeft(2, '0')}月 尚無記錄',
+            message,
             style: const TextStyle(fontSize: 18, color: AppColor.text),
           ),
           const SizedBox(height: 8),
@@ -461,12 +611,10 @@ class BookkeepingPageState extends State<BookkeepingPage> {
     }).toList();
   }
 
-  // ========== ✅ 顯示分類圖標 ==========
   Widget _buildRecordItem(Record record) {
     final isExpense = record.amount < 0;
     final displayAmount = record.amount.abs();
 
-    // ✅ 獲取分類的圖標和顏色
     final categoryInfo = CategoryData.getCategory(record.category);
     final icon = categoryInfo?.icon ?? Icons.category;
     final iconColor = categoryInfo?.color ?? AppColor.primary;
@@ -487,7 +635,6 @@ class BookkeepingPageState extends State<BookkeepingPage> {
       ),
       child: Row(
         children: [
-          // ✅ 使用分類圖標
           Container(
             width: 36,
             height: 36,
@@ -534,12 +681,19 @@ class BookkeepingPageState extends State<BookkeepingPage> {
                   ],
                 ),
                 const SizedBox(height: 1),
-                Text(
-                  record.note,
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                // ✅ 備註（如果有搜尋關鍵字，高亮顯示）
+                if (record.note.isNotEmpty) ...[
+                  _buildHighlightedText(
+                    record.note,
+                    _searchQuery.trim(),
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    highlightStyle: const TextStyle(
+                      fontSize: 11,
+                      color: AppColor.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -550,11 +704,47 @@ class BookkeepingPageState extends State<BookkeepingPage> {
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.bold,
-              color: AppColor.background,
+              color: isExpense ? Colors.red : Colors.green,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  // ========== 高亮顯示搜尋關鍵字 ==========
+  Widget _buildHighlightedText(
+    String text,
+    String query, {
+    required TextStyle style,
+    required TextStyle highlightStyle,
+  }) {
+    if (query.isEmpty) {
+      return Text(text, style: style);
+    }
+
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    final int startIndex = lowerText.indexOf(lowerQuery);
+
+    if (startIndex == -1) {
+      return Text(text, style: style);
+    }
+
+    final before = text.substring(0, startIndex);
+    final highlighted = text.substring(startIndex, startIndex + query.length);
+    final after = text.substring(startIndex + query.length);
+
+    return RichText(
+      text: TextSpan(
+        children: [
+          TextSpan(text: before, style: style),
+          TextSpan(text: highlighted, style: highlightStyle),
+          TextSpan(text: after, style: style),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 

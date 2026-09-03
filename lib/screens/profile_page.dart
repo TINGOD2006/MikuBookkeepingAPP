@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants/app_colors.dart';
 import '../services/storage_service.dart';
+import '../services/notification_listener.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -26,6 +27,7 @@ class _ProfilePageState extends State<ProfilePage> {
   double _totalIncome = 0;
 
   bool _isLoading = true;
+  bool _autoRecordEnabled = false;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -34,6 +36,7 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _loadUserData();
     _loadStatistics();
+    _loadAutoRecordSetting();
   }
 
   // ========== 載入用戶資料 ==========
@@ -82,6 +85,45 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  // ========== 載入自動記錄設定 ==========
+  Future<void> _loadAutoRecordSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _autoRecordEnabled = prefs.getBool('auto_record_enabled') ?? false;
+      });
+    }
+  }
+
+  // ========== 切換自動記錄 ==========
+  Future<void> _toggleAutoRecord(bool value) async {
+    final BuildContext currentContext = context;
+
+    // 儲存設定
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_record_enabled', value);
+    // 儲存 AI 分類開關（與自動記錄同步）
+    await prefs.setBool('use_ai_classification', value);
+    // 更新 NotificationListenerService
+    await NotificationListenerService.setAutoRecordEnabled(value);
+
+    if (!currentContext.mounted) return;
+
+    setState(() {
+      _autoRecordEnabled = value;
+    });
+
+    // 顯示提示
+    ScaffoldMessenger.of(currentContext).showSnackBar(
+      SnackBar(
+        content: Text(value ? '✅ 自動記錄已開啟（使用 AI 分類）' : 'ℹ️ 自動記錄已關閉（使用規則分類）'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: value ? Colors.green : Colors.orange,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   // ========== 更換頭像 ==========
   Future<void> _changeAvatar(ImageSource source) async {
     final BuildContext currentContext = context;
@@ -105,7 +147,6 @@ class _ProfilePageState extends State<ProfilePage> {
         _avatarPath = image.path;
       });
 
-      // ✅ 使用 currentContext.mounted 保護 ScaffoldMessenger
       if (currentContext.mounted) {
         ScaffoldMessenger.of(currentContext).showSnackBar(
           const SnackBar(
@@ -283,7 +324,6 @@ class _ProfilePageState extends State<ProfilePage> {
         _userName = controller.text.trim();
       });
 
-      // ✅ 使用 currentContext.mounted 保護 ScaffoldMessenger
       if (currentContext.mounted) {
         ScaffoldMessenger.of(currentContext).showSnackBar(
           const SnackBar(
@@ -359,7 +399,6 @@ class _ProfilePageState extends State<ProfilePage> {
         _userEmail = controller.text.trim();
       });
 
-      // ✅ 使用 currentContext.mounted 保護 ScaffoldMessenger
       if (currentContext.mounted) {
         ScaffoldMessenger.of(currentContext).showSnackBar(
           const SnackBar(
@@ -637,6 +676,41 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
           const SizedBox(height: 8),
+
+          // ✅ 自動記錄開關
+          _buildSettingsItem(
+            icon: Icons.auto_awesome_outlined,
+            label: '自動記錄',
+            trailing: Switch(
+              value: _autoRecordEnabled,
+              onChanged: _toggleAutoRecord,
+              activeThumbColor: AppColor.primary,
+            ),
+          ),
+
+          // 顯示當前分類方式
+          _buildSettingsItem(
+            icon: Icons.info_outline,
+            label: '分類方式',
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: _autoRecordEnabled
+                    ? AppColor.primary.withValues(alpha: 0.2)
+                    : Colors.orange.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                _autoRecordEnabled ? '🤖 AI 分類' : '📋 規則分類',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _autoRecordEnabled ? AppColor.primary : Colors.orange,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+
           _buildSettingsItem(
             icon: Icons.notifications_outlined,
             label: '預算提醒',

@@ -9,10 +9,12 @@ import 'screens/profile_page.dart';
 import 'widgets/nav_item.dart';
 import 'widgets/add_record_dialog.dart';
 import 'services/storage_service.dart';
+import 'services/notification_listener.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await CategoryData.init();
+  await NotificationListenerService.initialize();
   runApp(const MyApp());
 }
 
