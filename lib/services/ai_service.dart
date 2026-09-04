@@ -59,7 +59,7 @@ class AIService {
               'messages': [
                 {
                   'role': 'system',
-                  'content': '你是記帳分類助手。請根據用戶輸入的支付通知內容，判斷消費類別。類別只能是以下之一：食物、交通、購物、娛樂、醫療、教育、房租、水電、通訊、保險、稅務、捐款、紅包、其他。請以 JSON 格式回覆，包含 category（類別）、note（簡短備註）、confidence（信心指數0-1）。範例回覆：{"category":"食物","note":"午餐消費","confidence":0.95}',
+                  'content': '你是記帳分類助手。請根據用戶輸入的支付通知內容，判斷消費類別。類別只能是以下之一：食物、交通、購物、娛樂、醫療、教育、房租、水電、通訊、保險、稅務、捐款、紅包、轉帳、其他。若通知內容表示轉帳或转账，請分類為「轉帳」。請以 JSON 格式回覆，包含 category（類別）、note（簡短備註）、confidence（信心指數0-1）。範例回覆：{"category":"食物","note":"午餐消費","confidence":0.95}',
                 },
                 {'role': 'user', 'content': notificationText},
               ],
@@ -123,6 +123,7 @@ class AIService {
 
     // 定義關鍵詞映射
     final Map<String, List<String>> keywords = {
+      '轉帳': ['轉帳', '轉賬', '转账', 'transfer'],
       '食物': [
         'food',
         '餐',
@@ -386,10 +387,18 @@ class AIService {
 
   /// 從通知中提取支付方式
   static String? extractPaymentMethod(String text) {
-    final methods = ['支付寶', '微信支付', 'Apple Pay', 'Google Pay', '信用卡', '現金'];
-    for (final method in methods) {
-      if (text.contains(method)) {
-        return method;
+    const paymentMethodAliases = <String, List<String>>{
+      '支付宝': ['支付宝', '支付寶'],
+      '微信': ['微信', '微信支付'],
+      'mpay': ['mpay', 'MPay', 'Mpay', '澳門通', 'Macau Pass'],
+      'Apple Pay': ['Apple Pay'],
+      'Google Pay': ['Google Pay'],
+      '信用卡': ['信用卡'],
+      '現金': ['現金'],
+    };
+    for (final entry in paymentMethodAliases.entries) {
+      if (entry.value.any(text.contains)) {
+        return entry.key;
       }
     }
     return null;

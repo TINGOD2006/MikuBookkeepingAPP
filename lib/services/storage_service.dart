@@ -8,6 +8,7 @@ import '../models/record.dart';
 
 class StorageService {
   static const String _recordsKey = 'records';
+  static Future<void> _recordWriteQueue = Future<void>.value();
 
   // ========== 記錄相關方法 ==========
   Future<void> saveRecords(List<Record> records) async {
@@ -22,10 +23,8 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     final List<String>? recordsJson = prefs.getStringList(_recordsKey);
 
-    if (recordsJson == null || recordsJson.isEmpty) return [];
-
     final List<Record> records = [];
-    for (final json in recordsJson) {
+    for (final json in recordsJson ?? const <String>[]) {
       if (json.isEmpty) continue;
       try {
         final map = jsonDecode(json) as Map<String, dynamic>;
@@ -35,11 +34,35 @@ class StorageService {
         continue;
       }
     }
+
+    final nativeRecordsJson = prefs.getString('native_records');
+    if (nativeRecordsJson != null && nativeRecordsJson.isNotEmpty) {
+      final nativeRecords = jsonDecode(nativeRecordsJson) as List<dynamic>;
+      for (final json in nativeRecords) {
+        records.add(Record.fromJson(jsonDecode(json as String)));
+      }
+      await prefs.remove('native_records');
+    }
+
+    records.sort((a, b) => b.date.compareTo(a.date));
     return records;
   }
 
   Future<void> addRecord(Record record) async {
+    final operation = _recordWriteQueue.then(
+      (_) => _addRecordIfNew(record),
+      onError: (_, _) => _addRecordIfNew(record),
+    );
+    _recordWriteQueue = operation;
+    await operation;
+  }
+
+  Future<void> _addRecordIfNew(Record record) async {
     final records = await loadRecords();
+    if (records.any((existing) => existing.id == record.id)) {
+      debugPrint('⏭️ 跳過重複記錄: ${record.id}');
+      return;
+    }
     records.add(record);
     records.sort((a, b) => b.date.compareTo(a.date));
     await saveRecords(records);

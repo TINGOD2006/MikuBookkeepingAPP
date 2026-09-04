@@ -10,10 +10,12 @@ import 'widgets/nav_item.dart';
 import 'widgets/add_record_dialog.dart';
 import 'services/storage_service.dart';
 import 'services/notification_listener.dart';
+import 'services/local_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await CategoryData.init();
+  await LocalNotificationService.initialize();
   await NotificationListenerService.initialize();
   runApp(const MyApp());
 }
@@ -86,6 +88,7 @@ class _MyHomePageState extends State<MyHomePage> {
           body: AddRecordDialog(
             onSave: (record) async {
               await _storage.addRecord(record);
+              await LocalNotificationService.showRecordAdded(record);
               _refreshBookkeepingPage();
             },
           ),

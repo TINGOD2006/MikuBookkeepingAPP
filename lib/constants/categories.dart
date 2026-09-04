@@ -225,6 +225,7 @@ class CategoryData {
     CategoryItem(name: '零食', icon: Icons.icecream, color: Colors.pink),
     CategoryItem(name: '孩子', icon: Icons.child_care, color: Colors.lightGreen),
     CategoryItem(name: '蔬菜', icon: Icons.agriculture, color: Colors.green),
+    CategoryItem(name: '轉帳', icon: Icons.swap_horiz, color: Colors.blue),
   ];
 
   // ========== 預設收入分類 ==========

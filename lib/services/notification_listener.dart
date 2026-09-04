@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/record.dart';
 import '../services/storage_service.dart';
 import '../services/ai_service.dart';
+import '../services/local_notification_service.dart';
 
 class NotificationListenerService {
   static const MethodChannel _channel = MethodChannel(
@@ -64,6 +65,7 @@ class NotificationListenerService {
       final amount = (json['amount'] as num).toDouble();
       final merchant = json['merchant'] as String? ?? '';
       final text = json['text'] as String? ?? '';
+      final eventId = json['eventId'] as String?;
 
       debugPrint('💰 收到支付通知: 金額=$amount, 商家=$merchant');
 
@@ -96,9 +98,11 @@ class NotificationListenerService {
             : classification.note,
         date: DateTime.now(),
         createdAt: DateTime.now(),
+        id: eventId,
       );
 
       await _storage.addRecord(record);
+      await LocalNotificationService.showRecordAdded(record);
 
       _paymentStreamController?.add(
         PaymentNotification(
@@ -119,6 +123,20 @@ class NotificationListenerService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('auto_record_enabled', enabled);
     debugPrint('🔄 自動記帳已${enabled ? "啟用" : "停用"}'); // ✅ 使用 debugPrint
+  }
+
+  /// 更新後台常駐通知設定
+  static Future<void> setBackgroundNotificationEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('background_notification_enabled', enabled);
+    final started = await _channel.invokeMethod<bool>(
+      'setForegroundNotification',
+      enabled,
+    );
+    if (enabled && started != true) {
+      await _channel.invokeMethod<void>('openNotificationAccessSettings');
+    }
+    debugPrint('🔔 後台常駐通知已${enabled ? "啟用" : "停用"}');
   }
 
   /// ✅ 檢查自動記錄是否啟用

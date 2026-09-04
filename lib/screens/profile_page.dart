@@ -28,6 +28,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   bool _isLoading = true;
   bool _autoRecordEnabled = false;
+  bool _backgroundNotificationEnabled = false;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -37,6 +38,7 @@ class _ProfilePageState extends State<ProfilePage> {
     _loadUserData();
     _loadStatistics();
     _loadAutoRecordSetting();
+    _loadBackgroundNotificationSetting();
   }
 
   // ========== 載入用戶資料 ==========
@@ -93,6 +95,17 @@ class _ProfilePageState extends State<ProfilePage> {
         _autoRecordEnabled = prefs.getBool('auto_record_enabled') ?? false;
       });
     }
+
+  }
+
+  Future<void> _loadBackgroundNotificationSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _backgroundNotificationEnabled =
+            prefs.getBool('background_notification_enabled') ?? false;
+      });
+    }
   }
 
   // ========== 切換自動記錄 ==========
@@ -117,6 +130,22 @@ class _ProfilePageState extends State<ProfilePage> {
     ScaffoldMessenger.of(currentContext).showSnackBar(
       SnackBar(
         content: Text(value ? '✅ 自動記錄已開啟（使用 AI 分類）' : 'ℹ️ 自動記錄已關閉（使用規則分類）'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: value ? Colors.green : Colors.orange,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _toggleBackgroundNotification(bool value) async {
+    final currentContext = context;
+    await NotificationListenerService.setBackgroundNotificationEnabled(value);
+
+    if (!currentContext.mounted) return;
+    setState(() => _backgroundNotificationEnabled = value);
+    ScaffoldMessenger.of(currentContext).showSnackBar(
+      SnackBar(
+        content: Text(value ? '✅ 後台常駐通知已開啟' : 'ℹ️ 後台常駐通知已關閉'),
         behavior: SnackBarBehavior.floating,
         backgroundColor: value ? Colors.green : Colors.orange,
         duration: const Duration(seconds: 2),
@@ -686,6 +715,16 @@ class _ProfilePageState extends State<ProfilePage> {
               onChanged: _toggleAutoRecord,
               activeThumbColor: AppColor.primary,
             ),
+          ),
+
+          _buildSettingsItem(
+           icon: Icons.notifications_active_outlined,
+           label: '後台常駐通知',
+           trailing: Switch(
+             value: _backgroundNotificationEnabled,
+             onChanged: _toggleBackgroundNotification,
+             activeThumbColor: AppColor.primary,
+           ),
           ),
 
           // 顯示當前分類方式
