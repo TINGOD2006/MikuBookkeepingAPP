@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart'; // ✅ 加入 debugPrint
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,6 +21,10 @@ class NotificationListenerService {
 
   static bool _isInitialized = false;
 
+  // ✅ Flutter 端去重快取（記憶體）
+  static final Set<String> _processedIds = {};
+  static const int _maxCacheSize = 500;
+
   /// 支付通知流
   static Stream<PaymentNotification> get paymentStream {
     _paymentStreamController ??=
@@ -36,12 +40,57 @@ class NotificationListenerService {
 
     _isInitialized = true;
 
+    // ✅ 載入已處理的通知 ID 到記憶體快取
+    await _loadProcessedIds();
+
     final enabled = await isAutoRecordEnabled();
     if (enabled) {
-      debugPrint('✅ 自動記帳已啟用'); // ✅ 使用 debugPrint
+      debugPrint('✅ 自動記帳已啟用');
     } else {
-      debugPrint('⏸️ 自動記帳已停用'); // ✅ 使用 debugPrint
+      debugPrint('⏸️ 自動記帳已停用');
     }
+  }
+
+  /// ✅ 載入已處理的通知 ID
+  static Future<void> _loadProcessedIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ids = prefs.getStringList('flutter_processed_ids') ?? [];
+      _processedIds.addAll(ids);
+      debugPrint('📋 已載入 ${_processedIds.length} 筆已處理通知');
+    } catch (e) {
+      debugPrint('⚠️ 載入已處理通知失敗: $e');
+    }
+  }
+
+  /// ✅ 儲存已處理的通知 ID
+  static Future<void> _saveProcessedId(String id) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _processedIds.add(id);
+
+      // 限制快取大小
+      if (_processedIds.length > _maxCacheSize) {
+        final excess = _processedIds.length - _maxCacheSize;
+        final ids = _processedIds.toList();
+        for (var i = 0; i < excess && i < ids.length; i++) {
+          _processedIds.remove(ids[i]);
+        }
+      }
+
+      await prefs.setStringList(
+        'flutter_processed_ids',
+        _processedIds.toList(),
+      );
+    } catch (e) {
+      debugPrint('⚠️ 儲存已處理通知失敗: $e');
+    }
+  }
+
+  /// ✅ 檢查是否已處理
+  static bool _isAlreadyProcessed(String eventId) {
+    if (eventId.isEmpty) return false;
+    return _processedIds.contains(eventId);
   }
 
   /// ✅ 處理來自 Android 端的 MethodCall
@@ -64,32 +113,35 @@ class NotificationListenerService {
       final amount = (json['amount'] as num).toDouble();
       final merchant = json['merchant'] as String? ?? '';
       final text = json['text'] as String? ?? '';
-      final eventId = json['eventId'] as String?;
+      final eventId = json['eventId'] as String? ?? '';
 
       debugPrint('💰 收到支付通知: 金額=$amount, 商家=$merchant');
 
-      // ✅ 檢查自動記錄是否啟用（決定是否使用 AI）
+      // ✅ 檢查是否已處理過（Flutter 端去重）
+      if (eventId.isNotEmpty && _isAlreadyProcessed(eventId)) {
+        debugPrint('⏭️ Flutter 端跳過重複通知: $eventId');
+        return;
+      }
+
+      // ✅ 檢查自動記錄是否啟用
       final enabled = await isAutoRecordEnabled();
+      if (!enabled) {
+        debugPrint('⏸️ 自動記錄已停用，跳過');
+        return;
+      }
+
+      // ✅ 分類
+      final prefs = await SharedPreferences.getInstance();
+      final useAI = prefs.getBool('use_ai_classification') ?? true;
 
       AIClassificationResult classification;
-
-      if (enabled) {
-        // ✅ 自動記錄開啟：使用 AI 分類（或備用規則）
-        final prefs = await SharedPreferences.getInstance();
-        final useAI = prefs.getBool('use_ai_classification') ?? true;
-
-        if (useAI) {
-          classification = await AIService.classifyNotification(text);
-        } else {
-          classification = AIService.localClassify(text);
-        }
+      if (useAI) {
+        classification = await AIService.classifyNotification(text);
       } else {
-        // ✅ 自動記錄關閉：只使用規則表（本地分類），不呼叫 AI API
-        debugPrint('📋 自動記錄已關閉，使用規則表分類');
         classification = AIService.localClassify(text);
       }
 
-      // 創建記錄
+      // ✅ 創建記錄
       final record = Record(
         amount: -amount,
         category: classification.category,
@@ -98,10 +150,19 @@ class NotificationListenerService {
             : classification.note,
         date: DateTime.now(),
         createdAt: DateTime.now(),
-        id: eventId,
+        id: eventId.isNotEmpty
+            ? eventId
+            : DateTime.now().millisecondsSinceEpoch.toString(),
       );
 
+      // ✅ 儲存記錄
       await _storage.addRecord(record);
+
+      // ✅ 標記為已處理
+      if (eventId.isNotEmpty) {
+        await _saveProcessedId(eventId);
+      }
+
       await LocalNotificationService.showRecordAdded(record);
 
       _paymentStreamController?.add(
@@ -117,6 +178,7 @@ class NotificationListenerService {
       );
     } catch (e) {
       debugPrint('❌ 處理支付通知失敗: $e');
+      // ✅ 不標記為已處理，允許重試
     }
   }
 
@@ -124,7 +186,7 @@ class NotificationListenerService {
   static Future<void> setAutoRecordEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('auto_record_enabled', enabled);
-    debugPrint('🔄 自動記帳已${enabled ? "啟用" : "停用"}'); // ✅ 使用 debugPrint
+    debugPrint('🔄 自動記帳已${enabled ? "啟用" : "停用"}');
   }
 
   /// 更新後台常駐通知設定

@@ -27,7 +27,8 @@ class _ProfilePageState extends State<ProfilePage> {
   double _totalIncome = 0;
 
   bool _isLoading = true;
-  bool _autoRecordEnabled = false;
+  bool _autoRecordEnabled = false; // ✅ 是否記錄
+  bool _aiClassificationEnabled = true; // ✅ 是否使用 AI（預設開啟）
   bool _backgroundNotificationEnabled = false;
 
   final ImagePicker _picker = ImagePicker();
@@ -38,6 +39,7 @@ class _ProfilePageState extends State<ProfilePage> {
     _loadUserData();
     _loadStatistics();
     _loadAutoRecordSetting();
+    _loadAIClassificationSetting(); // ✅ 新增
     _loadBackgroundNotificationSetting();
   }
 
@@ -97,6 +99,17 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  // ✅ 新增：載入 AI 分類設定
+  Future<void> _loadAIClassificationSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _aiClassificationEnabled =
+            prefs.getBool('use_ai_classification') ?? true;
+      });
+    }
+  }
+
   Future<void> _loadBackgroundNotificationSetting() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
@@ -107,13 +120,12 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // ========== 切換自動記錄 ==========
+  // ========== ✅ 切換自動記錄（只控制是否記錄） ==========
   Future<void> _toggleAutoRecord(bool value) async {
     final BuildContext currentContext = context;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('auto_record_enabled', value);
-    await prefs.setBool('use_ai_classification', value);
     await NotificationListenerService.setAutoRecordEnabled(value);
 
     if (!currentContext.mounted) return;
@@ -124,9 +136,30 @@ class _ProfilePageState extends State<ProfilePage> {
 
     ScaffoldMessenger.of(currentContext).showSnackBar(
       SnackBar(
-        content: Text(
-          value ? '✅ 啟用 AI 分類（失敗時使用規則表）' : 'ℹ️ 改為使用規則表分類（不消耗 AI 額度）',
-        ),
+        content: Text(value ? '✅ 自動記錄已開啟' : 'ℹ️ 自動記錄已關閉'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: value ? Colors.green : Colors.orange,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  // ========== ✅ 切換 AI 分類（只控制分類方式） ==========
+  Future<void> _toggleAIClassification(bool value) async {
+    final BuildContext currentContext = context;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('use_ai_classification', value);
+
+    if (!currentContext.mounted) return;
+
+    setState(() {
+      _aiClassificationEnabled = value;
+    });
+
+    ScaffoldMessenger.of(currentContext).showSnackBar(
+      SnackBar(
+        content: Text(value ? '🤖 AI 分類已啟用' : '📋 已切換為規則表分類（不消耗 AI 額度）'),
         behavior: SnackBarBehavior.floating,
         backgroundColor: value ? Colors.green : Colors.orange,
         duration: const Duration(seconds: 2),
@@ -703,14 +736,58 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           const SizedBox(height: 8),
 
-          // ✅ 自動記錄開關（開啟=AI分類，關閉=規則表）
+          // ✅ 獨立開關 1：自動記錄（控制是否記錄）
           _buildSettingsItem(
-            icon: Icons.auto_awesome_outlined,
-            label: 'AI 自動分類',
+            icon: Icons.play_circle_outline,
+            label: '自動記錄',
             trailing: Switch(
               value: _autoRecordEnabled,
               onChanged: _toggleAutoRecord,
               activeThumbColor: AppColor.primary,
+            ),
+          ),
+
+          // ✅ 獨立開關 2：AI 分類（控制分類方式，僅當自動記錄開啟時可操作）
+          _buildSettingsItem(
+            icon: Icons.psychology_outlined,
+            label: 'AI 分類',
+            trailing: Switch(
+              value: _aiClassificationEnabled,
+              onChanged: _autoRecordEnabled ? _toggleAIClassification : null,
+              activeThumbColor: AppColor.primary,
+            ),
+          ),
+
+          // ✅ 顯示當前分類方式（狀態顯示）
+          _buildSettingsItem(
+            icon: Icons.info_outline,
+            label: '分類方式',
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: !_autoRecordEnabled
+                    ? Colors.grey.withValues(alpha: 0.2)
+                    : _aiClassificationEnabled
+                    ? AppColor.primary.withValues(alpha: 0.2)
+                    : Colors.orange.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                !_autoRecordEnabled
+                    ? '⏸️ 已停用'
+                    : _aiClassificationEnabled
+                    ? '🤖 AI 分類'
+                    : '📋 規則表分類',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: !_autoRecordEnabled
+                      ? Colors.grey
+                      : _aiClassificationEnabled
+                      ? AppColor.primary
+                      : Colors.orange,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
 
@@ -721,28 +798,6 @@ class _ProfilePageState extends State<ProfilePage> {
               value: _backgroundNotificationEnabled,
               onChanged: _toggleBackgroundNotification,
               activeThumbColor: AppColor.primary,
-            ),
-          ),
-          // 顯示當前分類方式
-          _buildSettingsItem(
-            icon: Icons.info_outline,
-            label: '分類方式',
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: _autoRecordEnabled
-                    ? AppColor.primary.withValues(alpha: 0.2)
-                    : Colors.orange.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                _autoRecordEnabled ? '🤖 AI 分類' : '📋 規則表分類',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: _autoRecordEnabled ? AppColor.primary : Colors.orange,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
             ),
           ),
 

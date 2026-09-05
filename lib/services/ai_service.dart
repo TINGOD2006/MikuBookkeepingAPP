@@ -6,9 +6,6 @@ import 'package:http/http.dart' as http;
 import '../models/record.dart';
 
 /// AI 分類服務
-///
-/// 負責將支付通知文字傳送給 AI API 進行分類，
-/// 並在 API 不可用時使用本地規則作為備用方案。
 class AIService {
   // ========== 配置 ==========
 
@@ -28,11 +25,6 @@ class AIService {
   // ========== 主要方法 ==========
 
   /// 將支付通知文字傳送給 AI 進行分類
-  ///
-  /// [notificationText] 通知的完整文字內容
-  /// [retries] 當前重試次數（內部使用）
-  /// Returns [AIClassificationResult] 分類結果
-  /// 回傳 [AIClassificationResult] 分類結果
   static Future<AIClassificationResult> classifyNotification(
     String notificationText, {
     int retries = 0,
@@ -54,12 +46,11 @@ class AIService {
               'Authorization': 'Bearer $apiKey',
             },
             body: jsonEncode({
-              // ✅ 在這裡指定模型
               'model': 'google/gemini-3.5-flash-lite',
               'messages': [
                 {
                   'role': 'system',
-                  'content': '你是記帳分類助手。請根據用戶輸入的支付通知內容，判斷消費類別。類別只能是以下之一：食物、交通、購物、娛樂、醫療、教育、房租、水電、通訊、保險、稅務、捐款、紅包、轉帳、其他。若通知內容表示轉帳或转账，請分類為「轉帳」。請以 JSON 格式回覆，包含 category（類別）、note（簡短備註）、confidence（信心指數0-1）。範例回覆：{"category":"食物","note":"午餐消費","confidence":0.95}',
+                  'content': '你是記帳分類助手。請根據用戶輸入的支付通知內容，判斷消費類別。類別只能是以下之一：食物、交通、購物、娛樂、醫療、教育、房租、水電、通訊、保險、稅務、捐款、紅包、轉帳、其他。請以 JSON 格式回覆，包含 category（類別）、note（簡短備註）、confidence（信心指數0-1）。範例回覆：{"category":"食物","note":"午餐消費","confidence":0.95}',
                 },
                 {'role': 'user', 'content': notificationText},
               ],
@@ -71,7 +62,6 @@ class AIService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // OpenAI 格式的回應結構
         final content = data['choices'][0]['message']['content'];
         try {
           final result = jsonDecode(content);
@@ -81,12 +71,11 @@ class AIService {
             confidence: (result['confidence'] as num?)?.toDouble() ?? 0.5,
           );
         } catch (e) {
+          debugPrint('AI 回應 JSON 解析失敗: $e');
           return localClassify(notificationText);
         }
       } else {
-        if (kDebugMode) {
-          print('AI API 錯誤: ${response.statusCode} - ${response.body}');
-        }
+        debugPrint('AI API 錯誤: ${response.statusCode} - ${response.body}');
         if (retries < maxRetries) {
           await Future.delayed(Duration(milliseconds: 500 * (retries + 1)));
           return await classifyNotification(
@@ -97,18 +86,14 @@ class AIService {
         return localClassify(notificationText);
       }
     } on http.ClientException catch (e) {
-      if (kDebugMode) {
-        print('AI API 網絡錯誤: $e');
-      }
+      debugPrint('AI API 網絡錯誤: $e');
       if (retries < maxRetries) {
         await Future.delayed(Duration(milliseconds: 500 * (retries + 1)));
         return classifyNotification(notificationText, retries: retries + 1);
       }
       return localClassify(notificationText);
     } catch (e) {
-      if (kDebugMode) {
-        print('AI API 錯誤: $e');
-      }
+      debugPrint('AI API 錯誤: $e');
       return localClassify(notificationText);
     }
   }
@@ -116,14 +101,11 @@ class AIService {
   // ========== 本地備用分類 ==========
 
   /// 本地備用分類規則
-  ///
-  /// 當 AI API 不可用時，使用關鍵字匹配進行分類
   static AIClassificationResult localClassify(String text) {
     final lowerText = text.toLowerCase();
 
     // 定義關鍵詞映射
     final Map<String, List<String>> keywords = {
-      '轉帳': ['轉帳', '轉賬', '转账', 'transfer'],
       '食物': [
         'food',
         '餐',
@@ -134,12 +116,6 @@ class AIService {
         '早餐',
         '下午茶',
         '餐廳',
-        '麥當勞',
-        '肯德基',
-        '星巴克',
-        '7-11',
-        '全家',
-        '便利商店',
         '便當',
         '外賣',
         'delivery',
@@ -147,14 +123,9 @@ class AIService {
         'meal',
         'cafe',
         'coffee',
-        '壽司',
-        '拉麵',
-        '火鍋',
-        '燒肉',
-        '牛排',
-        'pizza',
-        'burger',
         '麥當勞',
+        '肯德基',
+        '星巴克',
         '摩斯',
         '漢堡王',
         'subway',
@@ -324,15 +295,20 @@ class AIService {
       '稅務': ['稅', 'tax', '所得稅', '營業稅', '房屋稅', '地價稅', '牌照稅'],
       '捐款': ['捐款', '捐贈', '慈善', '公益', 'fund', 'donate', '紅十字會'],
       '紅包': ['紅包', '禮金', '包紅', '結婚', '喜宴', '生日禮物'],
+      '轉帳': ['轉賬', '轉帳', 'transfer', '轉帳成功', '轉賬成功', '轉帳給', '轉賬給'],
     };
 
     // 匹配關鍵詞
     for (final entry in keywords.entries) {
       for (final keyword in entry.value) {
         if (lowerText.contains(keyword)) {
+          final cleanedText = _cleanText(text);
           return AIClassificationResult(
             category: entry.key,
-            note: _cleanText(text),
+            // ✅ 安全截取，使用 cleanedText 的長度
+            note: cleanedText.isNotEmpty
+                ? cleanedText.substring(0, cleanedText.length.clamp(0, 80))
+                : '無備註',
             confidence: 0.7,
           );
         }
@@ -340,9 +316,12 @@ class AIService {
     }
 
     // 預設分類
+    final cleanedText = _cleanText(text);
     return AIClassificationResult(
       category: '其他',
-      note: _cleanText(text),
+      note: cleanedText.isNotEmpty
+          ? cleanedText.substring(0, cleanedText.length.clamp(0, 80))
+          : '無備註',
       confidence: 0.3,
     );
   }
@@ -351,11 +330,13 @@ class AIService {
 
   /// 清理文字（移除多餘空格和特殊字符）
   static String _cleanText(String text) {
+    if (text.isEmpty) return '無備註';
     // 移除多餘空格
     String cleaned = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     // 移除特殊字符（保留中文、英文、數字）
     cleaned = cleaned.replaceAll(RegExp(r'[^\u4e00-\u9fa5a-zA-Z0-9\s]'), ' ');
-    return cleaned.trim();
+    cleaned = cleaned.trim();
+    return cleaned.isEmpty ? '無備註' : cleaned;
   }
 
   /// 從通知中提取金額
@@ -387,18 +368,10 @@ class AIService {
 
   /// 從通知中提取支付方式
   static String? extractPaymentMethod(String text) {
-    const paymentMethodAliases = <String, List<String>>{
-      '支付宝': ['支付宝', '支付寶'],
-      '微信': ['微信', '微信支付'],
-      'mpay': ['mpay', 'MPay', 'Mpay', '澳門通', 'Macau Pass'],
-      'Apple Pay': ['Apple Pay'],
-      'Google Pay': ['Google Pay'],
-      '信用卡': ['信用卡'],
-      '現金': ['現金'],
-    };
-    for (final entry in paymentMethodAliases.entries) {
-      if (entry.value.any(text.contains)) {
-        return entry.key;
+    final methods = ['支付寶', '微信支付', 'Apple Pay', 'Google Pay', '信用卡', '現金'];
+    for (final method in methods) {
+      if (text.contains(method)) {
+        return method;
       }
     }
     return null;
@@ -440,7 +413,9 @@ class AIClassificationResult {
 
     return AIClassificationResult(
       category: json['category'] as String? ?? '其他',
-      note: AIService._cleanText(text),
+      note: text.isNotEmpty
+          ? text.substring(0, text.length.clamp(0, 80))
+          : '無備註',
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0.5,
       amount: (json['amount'] as num?)?.toDouble(),
       merchant: json['merchant'] as String?,
@@ -454,9 +429,12 @@ class AIClassificationResult {
     required String text,
     double confidence = 0.7,
   }) {
+    final cleanedText = text.isNotEmpty
+        ? text.substring(0, text.length.clamp(0, 80))
+        : '無備註';
     return AIClassificationResult(
       category: category,
-      note: AIService._cleanText(text),
+      note: cleanedText,
       confidence: confidence,
       amount: AIService.extractAmount(text),
       merchant: AIService.extractMerchant(text),

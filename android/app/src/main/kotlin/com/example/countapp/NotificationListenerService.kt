@@ -26,7 +26,9 @@ class NotificationListenerService : AndroidNotificationListenerService() {
         private const val NOTIFICATION_ID = 1001
         private var methodChannel: MethodChannel? = null
         private var serviceInstance: NotificationListenerService? = null
-        private const val DEDUPE_WINDOW_MS = 120_000L
+
+        // ✅ 去重機制（記憶體 + 持久化）
+        private const val DEDUPE_WINDOW_MS = 300_000L  // 5 分鐘
         private val recentEventIds = HashMap<String, Long>()
         private val dedupeLock = Any()
 
@@ -96,7 +98,7 @@ class NotificationListenerService : AndroidNotificationListenerService() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("📊 Miku 記帳")
             .setContentText("正在監聽支付通知，自動記錄中...")
-            .setSmallIcon(android.R.drawable.ic_menu_camera)  // 可換成你的 App 圖標
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)  // ✅ 用戶無法滑掉
             .build()
@@ -171,6 +173,7 @@ class NotificationListenerService : AndroidNotificationListenerService() {
             return
         }
 
+        // ✅ 去重檢查
         if (!shouldProcessEvent(eventId)) {
             Log.d(TAG, "⏭️ 忽略重複支付通知: $eventId")
             return
@@ -314,8 +317,11 @@ class NotificationListenerService : AndroidNotificationListenerService() {
         } catch (e: Exception) {
             Log.e(TAG, "發送通知到 Flutter 失敗: ${e.message}")
         }
-
     }
+
+    // ============================================================
+    // ✅ App 關閉時儲存記錄（備用方案）
+    // ============================================================
 
     private fun saveRecordWhenFlutterClosed(
         amount: Double,
@@ -353,18 +359,55 @@ class NotificationListenerService : AndroidNotificationListenerService() {
         }
     }
 
+    // ============================================================
+    // ✅ 去重機制（記憶體 + SharedPreferences 持久化）
+    // ============================================================
+
     private fun shouldProcessEvent(eventId: String): Boolean {
         val now = System.currentTimeMillis()
         synchronized(dedupeLock) {
+            // 1. 清理過期的記憶體記錄
             recentEventIds.entries.removeIf { now - it.value > DEDUPE_WINDOW_MS }
+
+            // 2. 檢查記憶體快取
             val lastSeen = recentEventIds[eventId]
             if (lastSeen != null && now - lastSeen <= DEDUPE_WINDOW_MS) {
                 return false
             }
+
+            // 3. 檢查 SharedPreferences（防止 App 重啟後重複處理）
+            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val processedIds = prefs.getStringSet("processed_notification_ids", mutableSetOf()) ?: mutableSetOf()
+            if (processedIds.contains(eventId)) {
+                Log.d(TAG, "⏭️ eventId 已存在於 SharedPreferences: $eventId")
+                return false
+            }
+
+            // 4. 標記為已處理（記憶體 + SharedPreferences）
             recentEventIds[eventId] = now
+            processedIds.add(eventId)
+            prefs.edit().putStringSet("processed_notification_ids", processedIds).apply()
+
+            // 5. 限制集合大小（避免無限增長）
+            if (processedIds.size > 1000) {
+                val toRemove = processedIds.size - 500
+                val iterator = processedIds.iterator()
+                repeat(toRemove) {
+                    if (iterator.hasNext()) {
+                        iterator.next()
+                        iterator.remove()
+                    }
+                }
+                prefs.edit().putStringSet("processed_notification_ids", processedIds).apply()
+            }
+
             return true
         }
     }
+
+    // ============================================================
+    // ✅ 建立事件唯一 ID
+    // ============================================================
 
     private fun createEventId(packageName: String, amount: Double, text: String): String {
         val normalizedText = text.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
