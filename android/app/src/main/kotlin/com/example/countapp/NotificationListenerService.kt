@@ -201,6 +201,18 @@ class NotificationListenerService : AndroidNotificationListenerService() {
     // ============================================================
 
     private fun isPaymentNotification(text: String, packageName: String): Boolean {
+        if (packageName.isNullOrEmpty() || text.isNullOrEmpty()) {
+            return false
+        }
+        if (packageName == "com.android.systemui") {
+            return false
+        }
+        if (packageName == "com.android.settings") {
+            return false
+        }
+        if (packageName == "com.example.countapp") {
+            return false
+        }
         val keywords = listOf(
             "支付", "付款", "轉帳", "转账", "交易", "消費", "支出",
             "payment", "transfer", "transaction", "spent",
@@ -216,6 +228,7 @@ class NotificationListenerService : AndroidNotificationListenerService() {
             "com.tencent.mm",
             "com.google.android.apps.wallet",
             "com.android.chrome",
+            "com.macaupass.rechargeEasy",
             "com.mpay.mobile",
             "com.mpay",
             "mo.mpay.mobile"

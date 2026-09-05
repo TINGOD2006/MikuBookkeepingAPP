@@ -95,7 +95,6 @@ class _ProfilePageState extends State<ProfilePage> {
         _autoRecordEnabled = prefs.getBool('auto_record_enabled') ?? false;
       });
     }
-
   }
 
   Future<void> _loadBackgroundNotificationSetting() async {
@@ -112,12 +111,9 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _toggleAutoRecord(bool value) async {
     final BuildContext currentContext = context;
 
-    // 儲存設定
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('auto_record_enabled', value);
-    // 儲存 AI 分類開關（與自動記錄同步）
     await prefs.setBool('use_ai_classification', value);
-    // 更新 NotificationListenerService
     await NotificationListenerService.setAutoRecordEnabled(value);
 
     if (!currentContext.mounted) return;
@@ -126,10 +122,11 @@ class _ProfilePageState extends State<ProfilePage> {
       _autoRecordEnabled = value;
     });
 
-    // 顯示提示
     ScaffoldMessenger.of(currentContext).showSnackBar(
       SnackBar(
-        content: Text(value ? '✅ 自動記錄已開啟（使用 AI 分類）' : 'ℹ️ 自動記錄已關閉（使用規則分類）'),
+        content: Text(
+          value ? '✅ 啟用 AI 分類（失敗時使用規則表）' : 'ℹ️ 改為使用規則表分類（不消耗 AI 額度）',
+        ),
         behavior: SnackBarBehavior.floating,
         backgroundColor: value ? Colors.green : Colors.orange,
         duration: const Duration(seconds: 2),
@@ -706,10 +703,10 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           const SizedBox(height: 8),
 
-          // ✅ 自動記錄開關
+          // ✅ 自動記錄開關（開啟=AI分類，關閉=規則表）
           _buildSettingsItem(
             icon: Icons.auto_awesome_outlined,
-            label: '自動記錄',
+            label: 'AI 自動分類',
             trailing: Switch(
               value: _autoRecordEnabled,
               onChanged: _toggleAutoRecord,
@@ -718,15 +715,14 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
 
           _buildSettingsItem(
-           icon: Icons.notifications_active_outlined,
-           label: '後台常駐通知',
-           trailing: Switch(
-             value: _backgroundNotificationEnabled,
-             onChanged: _toggleBackgroundNotification,
-             activeThumbColor: AppColor.primary,
-           ),
+            icon: Icons.notifications_active_outlined,
+            label: '後台常駐通知',
+            trailing: Switch(
+              value: _backgroundNotificationEnabled,
+              onChanged: _toggleBackgroundNotification,
+              activeThumbColor: AppColor.primary,
+            ),
           ),
-
           // 顯示當前分類方式
           _buildSettingsItem(
             icon: Icons.info_outline,
@@ -740,7 +736,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                _autoRecordEnabled ? '🤖 AI 分類' : '📋 規則分類',
+                _autoRecordEnabled ? '🤖 AI 分類' : '📋 規則表分類',
                 style: TextStyle(
                   fontSize: 12,
                   color: _autoRecordEnabled ? AppColor.primary : Colors.orange,

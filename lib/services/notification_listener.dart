@@ -58,7 +58,6 @@ class NotificationListenerService {
   }
 
   /// ✅ 處理支付通知
-  /// ✅ 處理支付通知
   static Future<void> _processPaymentNotification(String data) async {
     try {
       final json = jsonDecode(data);
@@ -69,23 +68,24 @@ class NotificationListenerService {
 
       debugPrint('💰 收到支付通知: 金額=$amount, 商家=$merchant');
 
-      // 檢查是否啟用自動記錄
+      // ✅ 檢查自動記錄是否啟用（決定是否使用 AI）
       final enabled = await isAutoRecordEnabled();
-      if (!enabled) {
-        debugPrint('⏸️ 自動記錄已停用，跳過');
-        return;
-      }
-
-      // ✅ 檢查分類方式
-      final prefs = await SharedPreferences.getInstance();
-      final useAI = prefs.getBool('use_ai_classification') ?? true;
 
       AIClassificationResult classification;
-      if (useAI) {
-        // 使用 AI 分類
-        classification = await AIService.classifyNotification(text);
+
+      if (enabled) {
+        // ✅ 自動記錄開啟：使用 AI 分類（或備用規則）
+        final prefs = await SharedPreferences.getInstance();
+        final useAI = prefs.getBool('use_ai_classification') ?? true;
+
+        if (useAI) {
+          classification = await AIService.classifyNotification(text);
+        } else {
+          classification = AIService.localClassify(text);
+        }
       } else {
-        // 使用本地規則分類
+        // ✅ 自動記錄關閉：只使用規則表（本地分類），不呼叫 AI API
+        debugPrint('📋 自動記錄已關閉，使用規則表分類');
         classification = AIService.localClassify(text);
       }
 
@@ -112,7 +112,9 @@ class NotificationListenerService {
         ),
       );
 
-      debugPrint('✅ 自動記帳成功: ${record.category} - \$$amount.toStringAsFixed(0)');
+      debugPrint(
+        '✅ 自動記帳成功: ${record.category} - \$${amount.toStringAsFixed(0)}',
+      );
     } catch (e) {
       debugPrint('❌ 處理支付通知失敗: $e');
     }
