@@ -200,45 +200,78 @@ class NotificationListenerService : AndroidNotificationListenerService() {
     }
 
     // ============================================================
-    // ✅ 支付通知判斷
+    // ✅ 支付通知判斷 (嚴格包名白名單過濾)
     // ============================================================
 
     private fun isPaymentNotification(text: String, packageName: String): Boolean {
         if (packageName.isNullOrEmpty() || text.isNullOrEmpty()) {
             return false
         }
-        if (packageName == "com.android.systemui") {
+        // 永遠排除系統及本 App
+        if (packageName == "com.android.systemui" ||
+            packageName == "com.android.settings" ||
+            packageName == "com.example.countapp") {
             return false
         }
-        if (packageName == "com.android.settings") {
+
+        // 取得 SharedPreferences 中儲存的白名單包名
+        val allowedPackages = getAllowedPackages()
+        
+        // 檢查包名是否在白名單中
+        val isPackageAllowed = allowedPackages.any { pkg ->
+            packageName.contains(pkg, ignoreCase = true) || pkg.contains(packageName, ignoreCase = true)
+        }
+
+        if (!isPackageAllowed) {
+            Log.d(TAG, "🚫 包名不在白名單內，忽略通知: $packageName")
             return false
         }
-        if (packageName == "com.example.countapp") {
-            return false
-        }
+
+        // 驗證通過白名單後，再檢查是否包含支付關鍵字
         val keywords = listOf(
             "支付", "付款", "轉帳", "转账", "交易", "消費", "支出",
             "payment", "transfer", "transaction", "spent",
             "金額", "HK$", "NT$", "¥", "$",
             "支付宝", "支付寶", "微信", "微信支付", "Apple Pay", "Google Pay",
-            "MPay", "mpay", "Mpay", "澳門通", "Macau Pass"
+            "MPay", "mpay", "Mpay", "澳門通", "Macau Pass", "成功"
         )
 
         val textMatch = keywords.any { text.contains(it, ignoreCase = true) }
+        if (!textMatch) {
+            Log.d(TAG, "🚫 雖在白名單包名內，但通知內容不包含支付關鍵字: $text")
+            return false
+        }
 
-        val paymentPackages = listOf(
+        return true
+    }
+
+    private fun getAllowedPackages(): List<String> {
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val defaultList = listOf(
+            "com.macaupass.rechargeEasy",
             "com.alipay.android.app",
             "com.tencent.mm",
             "com.google.android.apps.wallet",
-            "com.android.chrome",
-            "com.macaupass.rechargeEasy",
-            "com.mpay.mobile",
-            "com.mpay",
-            "mo.mpay.mobile"
+            "com.apple.wallet",
+            "com.octopus.nfc",
+            "hk.com.boc.bocmobilebanking",
+            "com.icbc.imobile"
         )
-        val packageMatch = paymentPackages.any { packageName.contains(it) }
-
-        return textMatch || packageMatch
+        try {
+            val jsonStr = prefs.getString("flutter.allowed_package_names", null)
+            if (!jsonStr.isNullOrEmpty()) {
+                val jsonArr = JSONArray(jsonStr)
+                val list = mutableListOf<String>()
+                for (i in 0 until jsonArr.length()) {
+                    val pkg = jsonArr.optString(i)
+                    if (pkg.isNotBlank()) list.add(pkg)
+                }
+                if (list.isNotEmpty()) return list
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "讀取白名單失敗: ${e.message}")
+        }
+        return defaultList
     }
 
     // ============================================================

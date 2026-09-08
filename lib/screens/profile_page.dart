@@ -801,6 +801,16 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
 
+          // ✅ 新增：支付通知白名單包名管理
+          _buildSettingsItem(
+            icon: Icons.security_outlined,
+            label: '支付 APP 包名白名單',
+            trailing: TextButton(
+              onPressed: _showAllowedPackagesDialog,
+              child: const Text('管理', style: TextStyle(color: AppColor.primary)),
+            ),
+          ),
+
           _buildSettingsItem(
             icon: Icons.notifications_outlined,
             label: '預算提醒',
@@ -851,6 +861,134 @@ class _ProfilePageState extends State<ProfilePage> {
           trailing,
         ],
       ),
+    );
+  }
+
+  // ========== 管理白名單包名對話框 ==========
+  Future<void> _showAllowedPackagesDialog() async {
+    List<String> packages = await NotificationListenerService.getAllowedPackages();
+    final TextEditingController controller = TextEditingController();
+    final BuildContext currentContext = context;
+
+    await showDialog(
+      context: currentContext,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: AppColor.background,
+              title: const Text(
+                '支付 APP 包名白名單',
+                style: TextStyle(color: AppColor.text, fontSize: 18),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      '僅會讀取並記錄以下包名的支付通知（例如 com.macaupass.rechargeEasy），其他軟體通知將直接過濾不作記錄。',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: controller,
+                            style: const TextStyle(color: AppColor.text, fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: '輸入包名 (例如 com.example.pay)',
+                              hintStyle: TextStyle(color: Colors.grey[600]),
+                              isDense: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColor.primary,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                          ),
+                          onPressed: () {
+                            final text = controller.text.trim();
+                            if (text.isNotEmpty && !packages.contains(text)) {
+                              setStateDialog(() {
+                                packages.add(text);
+                                controller.clear();
+                              });
+                            }
+                          },
+                          child: const Text('新增'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '目前允許的包名:',
+                        style: TextStyle(color: AppColor.text, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      height: 200,
+                      child: ListView.builder(
+                        itemCount: packages.length,
+                        itemBuilder: (context, index) {
+                          final pkg = packages[index];
+                          return ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              pkg,
+                              style: const TextStyle(color: AppColor.text, fontSize: 13),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                              onPressed: () {
+                                setStateDialog(() {
+                                  packages.removeAt(index);
+                                });
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('取消', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColor.primary),
+                  onPressed: () async {
+                    await NotificationListenerService.setAllowedPackages(packages);
+                    if (context.mounted) Navigator.pop(context);
+                    if (currentContext.mounted) {
+                      ScaffoldMessenger.of(currentContext).showSnackBar(
+                        const SnackBar(
+                          content: Text('✅ 包名白名單已更新'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('儲存'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

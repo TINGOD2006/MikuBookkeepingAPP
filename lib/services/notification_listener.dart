@@ -25,6 +25,48 @@ class NotificationListenerService {
   static final Set<String> _processedIds = {};
   static const int _maxCacheSize = 500;
 
+  /// 預設支援的支付應用包名列表
+  static const List<String> defaultAllowedPackages = [
+    'com.macaupass.rechargeEasy', // MPay / Macau Pass
+    'com.alipay.android.app', // 支付寶
+    'com.tencent.mm', // 微信
+    'com.google.android.apps.wallet', // Google Pay / Google Wallet
+    'com.apple.wallet', // Apple Wallet
+    'com.octopus.nfc', // 八達通
+    'hk.com.boc.bocmobilebanking', // 中銀香港
+    'com.icbc.imobile', // 工銀亞洲
+  ];
+
+  /// 取得允許的包名列表
+  static Future<List<String>> getAllowedPackages() async {
+    final prefs = await SharedPreferences.getInstance();
+    final custom = prefs.getStringList('allowed_package_names');
+    if (custom != null && custom.isNotEmpty) {
+      return custom;
+    }
+    return defaultAllowedPackages;
+  }
+
+  /// 設定允許的包名列表
+  static Future<void> setAllowedPackages(List<String> packages) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('allowed_package_names', packages);
+    debugPrint('🔄 已更新允許的包名白名單: $packages');
+  }
+
+  /// 檢查特定包名是否在白名單中
+  static Future<bool> isPackageAllowed(String packageName) async {
+    if (packageName.isEmpty) return false;
+    // 永遠排除系統及本App本身
+    if (packageName == 'com.android.systemui' ||
+        packageName == 'com.android.settings' ||
+        packageName == 'com.example.countapp') {
+      return false;
+    }
+    final allowed = await getAllowedPackages();
+    return allowed.any((pkg) => packageName.contains(pkg) || pkg.contains(packageName));
+  }
+
   /// 支付通知流
   static Stream<PaymentNotification> get paymentStream {
     _paymentStreamController ??=
