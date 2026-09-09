@@ -9,6 +9,7 @@ import '../models/record.dart';
 import '../services/storage_service.dart';
 import '../services/ai_service.dart';
 import '../services/local_notification_service.dart';
+import '../services/message_service.dart';
 
 class NotificationListenerService {
   static const MethodChannel _channel = MethodChannel(
@@ -150,6 +151,21 @@ class NotificationListenerService {
 
   /// ✅ 處理支付通知
   static Future<void> _processPaymentNotification(String data) async {
+    // ✅ 併發去重：同一時間只處理一筆相同 eventId 的通知
+    String? rawId;
+    try {
+      final raw = jsonDecode(data);
+      rawId = raw['eventId'] as String? ?? '';
+    } catch (_) {
+      // 交給下方正式解析處理
+    }
+    if (rawId != null && rawId.isNotEmpty) {
+      if (!MessageService.beginProcess('notif_$rawId')) {
+        debugPrint('⏭️ 通知處理中，跳過重複請求: $rawId');
+        return;
+      }
+    }
+
     try {
       final json = jsonDecode(data);
       final amount = (json['amount'] as num).toDouble();
@@ -205,7 +221,9 @@ class NotificationListenerService {
         await _saveProcessedId(eventId);
       }
 
+      // ✅ 通知（系統通知與預算提醒皆已內建去重）
       await LocalNotificationService.showRecordAdded(record);
+      await LocalNotificationService.checkAndShowBudgetAlert(record);
 
       _paymentStreamController?.add(
         PaymentNotification(
@@ -221,6 +239,10 @@ class NotificationListenerService {
     } catch (e) {
       debugPrint('❌ 處理支付通知失敗: $e');
       // ✅ 不標記為已處理，允許重試
+    } finally {
+      if (rawId != null && rawId.isNotEmpty) {
+        MessageService.endProcess('notif_$rawId');
+      }
     }
   }
 

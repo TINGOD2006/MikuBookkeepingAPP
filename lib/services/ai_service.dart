@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/record.dart';
 
@@ -9,18 +10,45 @@ import '../models/record.dart';
 class AIService {
   // ========== 配置 ==========
 
-  /// AI API 端點（替換為你的實際端點）
-  static const String apiUrl = 'https://api.ofox.ai/v1/chat/completions';
-
-  /// API 金鑰（替換為你的實際金鑰）
-  static const String apiKey =
-      'sk-of-xSvSxcglZQrvAGbcrxgoIFEFbGtgOVWWnZXybprFXPcNdqjHXfQsRWDBHzHMkQNT';
-
   /// 請求超時時間
   static const Duration timeout = Duration(seconds: 5);
 
   /// 最大重試次數
   static const int maxRetries = 2;
+
+  /// AI 設定（由用戶自行設定）
+  static const String prefApiUrl = 'ai_api_url';
+  static const String prefApiKey = 'ai_api_key';
+  static const String prefModel = 'ai_model';
+
+  /// 儲存用戶自訂的 AI 設定
+  static Future<void> saveConfig({
+    required String apiUrl,
+    required String apiKey,
+    required String model,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(prefApiUrl, apiUrl.trim());
+    await prefs.setString(prefApiKey, apiKey.trim());
+    await prefs.setString(prefModel, model.trim());
+  }
+
+  /// 讀取用戶自訂的 AI 設定；未完整設定時回傳 null
+  static Future<AIConfig?> loadConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final apiUrl = prefs.getString(prefApiUrl)?.trim() ?? '';
+    final apiKey = prefs.getString(prefApiKey)?.trim() ?? '';
+    final model = prefs.getString(prefModel)?.trim() ?? '';
+    if (apiUrl.isEmpty || apiKey.isEmpty || model.isEmpty) {
+      return null;
+    }
+    return AIConfig(apiUrl: apiUrl, apiKey: apiKey, model: model);
+  }
+
+  /// 是否已設定完整的 AI API
+  static Future<bool> hasValidConfig() async {
+    return await loadConfig() != null;
+  }
 
   // ========== 主要方法 ==========
 
@@ -37,16 +65,22 @@ class AIService {
       );
     }
 
+    final config = await loadConfig();
+    if (config == null) {
+      debugPrint('⚠️ 尚未設定 AI API，改用本地分類');
+      return localClassify(notificationText);
+    }
+
     try {
       final response = await http
           .post(
-            Uri.parse(apiUrl),
+            Uri.parse(config.apiUrl),
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer $apiKey',
+              'Authorization': 'Bearer ${config.apiKey}',
             },
             body: jsonEncode({
-              'model': 'google/gemini-3.5-flash-lite',
+              'model': config.model,
               'messages': [
                 {
                   'role': 'system',
@@ -479,5 +513,24 @@ class AIClassificationResult {
   @override
   String toString() {
     return 'AIClassificationResult(category: $category, confidence: $confidence, amount: $amount, merchant: $merchant)';
+  }
+}
+
+/// AI API 設定（由用戶自行填寫）
+class AIConfig {
+  final String apiUrl;
+  final String apiKey;
+  final String model;
+
+  const AIConfig({
+    required this.apiUrl,
+    required this.apiKey,
+    required this.model,
+  });
+
+  /// 將 API Key 遮蔽顯示（只顯示前 4 碼與後 4 碼）
+  String get maskedKey {
+    if (apiKey.length <= 8) return '****';
+    return '${apiKey.substring(0, 4)}****${apiKey.substring(apiKey.length - 4)}';
   }
 }

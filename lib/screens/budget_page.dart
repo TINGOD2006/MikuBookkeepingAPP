@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 import '../services/storage_service.dart';
+import '../services/local_notification_service.dart';
+import '../services/message_service.dart';
 import '../widgets/month_picker_dialog.dart';
 
 class BudgetPage extends StatefulWidget {
@@ -114,6 +116,10 @@ class _BudgetPageState extends State<BudgetPage> {
         amount,
       );
       _budgetAmount = amount;
+      await LocalNotificationService.checkAndShowBudgetAlertForMonth(
+        _selectedMonth.year,
+        _selectedMonth.month,
+      );
 
       if (mounted) {
         setState(() => _isLoading = false);
@@ -610,13 +616,7 @@ class _BudgetPageState extends State<BudgetPage> {
 
   // ========== SnackBar ==========
   void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: color,
-      ),
-    );
+    MessageService.showSnackBar(message, color: color);
   }
 
   @override

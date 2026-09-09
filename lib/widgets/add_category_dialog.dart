@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/categories.dart';
+import '../services/message_service.dart';
 
 class AddCategoryDialog extends StatefulWidget {
   final String type;
@@ -214,12 +215,10 @@ class _AddCategoryDialogState extends State<AddCategoryDialog> {
   void _saveCategory() {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('請輸入分類名稱！'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.red,
-        ),
+      MessageService.showSnackBarOn(
+        ScaffoldMessenger.of(context),
+        '請輸入分類名稱！',
+        color: Colors.red,
       );
       return;
     }
@@ -227,12 +226,10 @@ class _AddCategoryDialogState extends State<AddCategoryDialog> {
     final existingCategories = CategoryData.getCategories(widget.type);
     for (final category in existingCategories) {
       if (category.name == name) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('該分類已存在！'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red,
-          ),
+        MessageService.showSnackBarOn(
+          ScaffoldMessenger.of(context),
+          '該分類已存在！',
+          color: Colors.red,
         );
         return;
       }

@@ -4,6 +4,7 @@ import '../models/record.dart';
 import '../constants/app_colors.dart';
 import '../constants/categories.dart';
 import '../services/storage_service.dart';
+import '../services/message_service.dart';
 import '../widgets/month_picker_dialog.dart';
 
 class BookkeepingPage extends StatefulWidget {
@@ -599,11 +600,10 @@ class BookkeepingPageState extends State<BookkeepingPage> {
         ),
         onDismissed: (direction) {
           _deleteRecord(globalIndex);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('已刪除記錄'),
-              behavior: SnackBarBehavior.floating,
-            ),
+          MessageService.showSnackBar(
+            '已刪除記錄',
+            key: 'record_deleted',
+            color: Colors.grey.shade700,
           );
         },
         child: _buildRecordItem(record),

@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/app_colors.dart';
 import '../services/storage_service.dart';
 import '../services/notification_listener.dart';
+import '../services/ai_service.dart';
+import '../services/message_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -30,6 +32,10 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _autoRecordEnabled = false; // ✅ 是否記錄
   bool _aiClassificationEnabled = true; // ✅ 是否使用 AI（預設開啟）
   bool _backgroundNotificationEnabled = false;
+  bool _budgetNotificationEnabled = true;
+  String _aiApiUrl = '';
+  String _aiApiKey = '';
+  String _aiModel = '';
 
   final ImagePicker _picker = ImagePicker();
 
@@ -41,6 +47,8 @@ class _ProfilePageState extends State<ProfilePage> {
     _loadAutoRecordSetting();
     _loadAIClassificationSetting(); // ✅ 新增
     _loadBackgroundNotificationSetting();
+    _loadBudgetNotificationSetting();
+    _loadAISettings();
   }
 
   // ========== 載入用戶資料 ==========
@@ -120,6 +128,27 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _loadBudgetNotificationSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _budgetNotificationEnabled =
+            prefs.getBool('budget_notification_enabled') ?? true;
+      });
+    }
+  }
+
+  Future<void> _loadAISettings() async {
+    final config = await AIService.loadConfig();
+    if (mounted) {
+      setState(() {
+        _aiApiUrl = config?.apiUrl ?? '';
+        _aiApiKey = config?.apiKey ?? '';
+        _aiModel = config?.model ?? '';
+      });
+    }
+  }
+
   // ========== ✅ 切換自動記錄（只控制是否記錄） ==========
   Future<void> _toggleAutoRecord(bool value) async {
     final BuildContext currentContext = context;
@@ -134,13 +163,10 @@ class _ProfilePageState extends State<ProfilePage> {
       _autoRecordEnabled = value;
     });
 
-    ScaffoldMessenger.of(currentContext).showSnackBar(
-      SnackBar(
-        content: Text(value ? '✅ 自動記錄已開啟' : 'ℹ️ 自動記錄已關閉'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: value ? Colors.green : Colors.orange,
-        duration: const Duration(seconds: 2),
-      ),
+    MessageService.showSnackBar(
+      value ? '✅ 自動記錄已開啟' : 'ℹ️ 自動記錄已關閉',
+      color: value ? Colors.green : Colors.orange,
+      duration: const Duration(seconds: 2),
     );
   }
 
@@ -157,13 +183,10 @@ class _ProfilePageState extends State<ProfilePage> {
       _aiClassificationEnabled = value;
     });
 
-    ScaffoldMessenger.of(currentContext).showSnackBar(
-      SnackBar(
-        content: Text(value ? '🤖 AI 分類已啟用' : '📋 已切換為規則表分類（不消耗 AI 額度）'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: value ? Colors.green : Colors.orange,
-        duration: const Duration(seconds: 2),
-      ),
+    MessageService.showSnackBar(
+      value ? '🤖 AI 分類已啟用' : '📋 已切換為規則表分類（不消耗 AI 額度）',
+      color: value ? Colors.green : Colors.orange,
+      duration: const Duration(seconds: 2),
     );
   }
 
@@ -173,13 +196,29 @@ class _ProfilePageState extends State<ProfilePage> {
 
     if (!currentContext.mounted) return;
     setState(() => _backgroundNotificationEnabled = value);
-    ScaffoldMessenger.of(currentContext).showSnackBar(
-      SnackBar(
-        content: Text(value ? '✅ 後台常駐通知已開啟' : 'ℹ️ 後台常駐通知已關閉'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: value ? Colors.green : Colors.orange,
-        duration: const Duration(seconds: 2),
-      ),
+    MessageService.showSnackBar(
+      value ? '✅ 後台常駐通知已開啟' : 'ℹ️ 後台常駐通知已關閉',
+      color: value ? Colors.green : Colors.orange,
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  Future<void> _toggleBudgetNotification(bool value) async {
+    final BuildContext currentContext = context;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('budget_notification_enabled', value);
+
+    if (!currentContext.mounted) return;
+
+    setState(() {
+      _budgetNotificationEnabled = value;
+    });
+
+    MessageService.showSnackBar(
+      value ? '🔔 預算提醒已開啟' : '🔕 預算提醒已關閉',
+      color: value ? Colors.green : Colors.orange,
+      duration: const Duration(seconds: 2),
     );
   }
 
@@ -207,24 +246,18 @@ class _ProfilePageState extends State<ProfilePage> {
       });
 
       if (currentContext.mounted) {
-        ScaffoldMessenger.of(currentContext).showSnackBar(
-          const SnackBar(
-            content: Text('頭像已更新 ✅'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.green,
-          ),
+        MessageService.showSnackBar(
+          '頭像已更新 ✅',
+          color: Colors.green,
         );
       }
     } catch (e) {
       if (!currentContext.mounted) return;
 
       if (currentContext.mounted) {
-        ScaffoldMessenger.of(currentContext).showSnackBar(
-          SnackBar(
-            content: Text('更新頭像失敗: $e'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red,
-          ),
+        MessageService.showSnackBar(
+          '更新頭像失敗: $e',
+          color: Colors.red,
         );
       }
     }
@@ -384,12 +417,9 @@ class _ProfilePageState extends State<ProfilePage> {
       });
 
       if (currentContext.mounted) {
-        ScaffoldMessenger.of(currentContext).showSnackBar(
-          const SnackBar(
-            content: Text('名稱已更新 ✅'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.green,
-          ),
+        MessageService.showSnackBar(
+          '名稱已更新 ✅',
+          color: Colors.green,
         );
       }
     }
@@ -459,12 +489,9 @@ class _ProfilePageState extends State<ProfilePage> {
       });
 
       if (currentContext.mounted) {
-        ScaffoldMessenger.of(currentContext).showSnackBar(
-          const SnackBar(
-            content: Text('郵箱已更新 ✅'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.green,
-          ),
+        MessageService.showSnackBar(
+          '郵箱已更新 ✅',
+          color: Colors.green,
         );
       }
     }
@@ -791,6 +818,32 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
 
+          // ✅ 新增：AI API 設定（用戶自行填入 API、Key、模型）
+          _buildSettingsItem(
+            icon: Icons.key_outlined,
+            label: 'AI API 設定',
+            trailing: TextButton(
+              onPressed: _showAISettingsDialog,
+              child: const Text(
+                '設定',
+                style: TextStyle(color: AppColor.primary),
+              ),
+            ),
+          ),
+          if (_aiApiUrl.isNotEmpty || _aiApiKey.isNotEmpty || _aiModel.isNotEmpty)
+            _buildSettingsItem(
+              icon: Icons.badge_outlined,
+              label: '目前 AI 設定',
+              trailing: Text(
+                '${_aiModel.isNotEmpty ? _aiModel : '未設定模型'} ・ '
+                '${_aiApiKey.isNotEmpty ? 'Key: ${AIConfig(apiUrl: _aiApiUrl, apiKey: _aiApiKey, model: _aiModel).maskedKey}' : '未設定 Key'}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColor.textSecondary,
+                ),
+              ),
+            ),
+
           _buildSettingsItem(
             icon: Icons.notifications_active_outlined,
             label: '後台常駐通知',
@@ -815,8 +868,8 @@ class _ProfilePageState extends State<ProfilePage> {
             icon: Icons.notifications_outlined,
             label: '預算提醒',
             trailing: Switch(
-              value: true,
-              onChanged: (value) {},
+              value: _budgetNotificationEnabled,
+              onChanged: _toggleBudgetNotification,
               activeThumbColor: AppColor.primary,
             ),
           ),
@@ -861,6 +914,152 @@ class _ProfilePageState extends State<ProfilePage> {
           trailing,
         ],
       ),
+    );
+  }
+
+  // ========== AI 設定對話框 ==========
+  Future<void> _showAISettingsDialog() async {
+    final config = await AIService.loadConfig();
+    final TextEditingController urlController = TextEditingController(
+      text: config?.apiUrl ?? '',
+    );
+    final TextEditingController keyController = TextEditingController(
+      text: config?.apiKey ?? '',
+    );
+    final TextEditingController modelController = TextEditingController(
+      text: config?.model ?? '',
+    );
+    final BuildContext currentContext = context;
+
+    await showDialog(
+      context: currentContext,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColor.background,
+          title: const Text(
+            'AI 設定',
+            style: TextStyle(color: AppColor.text, fontSize: 18),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '請填入你自己的 AI API 設定，用於自動記錄時進行 AI 分類。未設定時將使用本地規則分類。',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'API URL',
+                    style: TextStyle(color: AppColor.text, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: urlController,
+                    style: const TextStyle(color: AppColor.text, fontSize: 13),
+                    keyboardType: TextInputType.url,
+                    decoration: InputDecoration(
+                      hintText: '例如 https://api.openai.com/v1/chat/completions',
+                      hintStyle: TextStyle(color: Colors.grey[600]),
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'API Key',
+                    style: TextStyle(color: AppColor.text, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: keyController,
+                    style: const TextStyle(color: AppColor.text, fontSize: 13),
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      hintText: 'sk-...',
+                      hintStyle: TextStyle(color: Colors.grey[600]),
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '模型',
+                    style: TextStyle(color: AppColor.text, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: modelController,
+                    style: const TextStyle(color: AppColor.text, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: '例如 gpt-4o-mini',
+                      hintStyle: TextStyle(color: Colors.grey[600]),
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColor.primary),
+              onPressed: () async {
+                final url = urlController.text.trim();
+                final key = keyController.text.trim();
+                final model = modelController.text.trim();
+
+                if (url.isEmpty || key.isEmpty || model.isEmpty) {
+                  if (currentContext.mounted) {
+                    MessageService.showSnackBar(
+                      '請完整填寫 API URL、Key 與模型名稱',
+                      color: Colors.orange,
+                    );
+                  }
+                  return;
+                }
+
+                await AIService.saveConfig(
+                  apiUrl: url,
+                  apiKey: key,
+                  model: model,
+                );
+
+                if (currentContext.mounted) {
+                  setState(() {
+                    _aiApiUrl = url;
+                    _aiApiKey = key;
+                    _aiModel = model;
+                  });
+                }
+
+                if (context.mounted) Navigator.pop(context);
+                if (currentContext.mounted) {
+                  MessageService.showSnackBar(
+                    '✅ AI 設定已儲存',
+                    color: Colors.green,
+                  );
+                }
+              },
+              child: const Text('儲存'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -974,11 +1173,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     await NotificationListenerService.setAllowedPackages(packages);
                     if (context.mounted) Navigator.pop(context);
                     if (currentContext.mounted) {
-                      ScaffoldMessenger.of(currentContext).showSnackBar(
-                        const SnackBar(
-                          content: Text('✅ 包名白名單已更新'),
-                          backgroundColor: Colors.green,
-                        ),
+                      MessageService.showSnackBar(
+                        '✅ 包名白名單已更新',
+                        color: Colors.green,
                       );
                     }
                   },

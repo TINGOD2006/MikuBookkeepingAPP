@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/categories.dart';
 import '../models/record.dart';
+import '../services/message_service.dart';
 import 'add_category_dialog.dart';
 
 class AddRecordDialog extends StatefulWidget {
@@ -596,13 +597,8 @@ Future<void> _selectDate() async {
         return;
       }
 
-      ScaffoldMessenger.of(currentContext).showSnackBar(
-        const SnackBar(
-          content: Text('記帳成功 ✅'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.green,
-        ),
-      );
+      // ✅ 成功訊息已由主頁的 MessageService 統一推送（含去重），
+      //    此處不再重複顯示，避免訊息重疊彈出。
 
       await Future.delayed(const Duration(milliseconds: 300));
 
@@ -624,12 +620,7 @@ Future<void> _selectDate() async {
   }
 
   void _showSnackBar(BuildContext context, String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: color,
-      ),
-    );
+    final messenger = ScaffoldMessenger.of(context);
+    MessageService.showSnackBarOn(messenger, message, color: color);
   }
 }

@@ -11,12 +11,14 @@ import 'widgets/add_record_dialog.dart';
 import 'services/storage_service.dart';
 import 'services/notification_listener.dart';
 import 'services/local_notification_service.dart';
+import 'services/message_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await CategoryData.init();
   await LocalNotificationService.initialize();
   await NotificationListenerService.initialize();
+  MessageService.init();
   runApp(const MyApp());
 }
 
@@ -27,6 +29,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Miku 記帳',
+      scaffoldMessengerKey: MessageService.messengerKey,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: AppColor.primary),
@@ -89,6 +92,12 @@ class _MyHomePageState extends State<MyHomePage> {
             onSave: (record) async {
               await _storage.addRecord(record);
               await LocalNotificationService.showRecordAdded(record);
+              await LocalNotificationService.checkAndShowBudgetAlert(record);
+              MessageService.showSnackBar(
+                '記帳成功 ✅',
+                key: 'record_saved_${record.id}',
+                color: Colors.green,
+              );
               _refreshBookkeepingPage();
             },
           ),
