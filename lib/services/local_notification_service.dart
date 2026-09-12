@@ -2,6 +2,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/record.dart';
+import '../utils/amount_formatter.dart';
 import 'storage_service.dart';
 
 class LocalNotificationService {
@@ -56,9 +57,7 @@ class LocalNotificationService {
     final isExpense = record.amount < 0;
     final type = isExpense ? '支出' : '收入／轉帳';
     final sign = isExpense ? '-' : '+';
-    final amount = record.amount.abs().toStringAsFixed(
-      record.amount.abs() == record.amount.abs().roundToDouble() ? 0 : 2,
-    );
+    final amount = AmountFormatter.format(record.amount.abs());
     final note = record.note.trim();
     final details = note.isEmpty ? record.category : '${record.category}・$note';
 
@@ -114,11 +113,11 @@ class LocalNotificationService {
     );
 
     if (monthlyExpense > budget) {
-      final overAmount = (monthlyExpense - budget).toStringAsFixed(0);
+      final overAmount = AmountFormatter.format(monthlyExpense - budget);
       await _plugin.show(
         'budget_over_${year}_$month'.hashCode,
         '⚠️ 預算超支提醒',
-        '【$month月】累積支出 \$${monthlyExpense.toStringAsFixed(0)}，已超過預算 \$${budget.toStringAsFixed(0)} (超支 \$$overAmount)',
+        '【$month月】累積支出 \$${AmountFormatter.format(monthlyExpense)}，已超過預算 \$${AmountFormatter.format(budget)} (超支 \$$overAmount)',
         const NotificationDetails(android: androidDetails),
       );
     } else if (monthlyExpense >= budget * 0.8) {
@@ -126,7 +125,7 @@ class LocalNotificationService {
       await _plugin.show(
         'budget_near_${year}_$month'.hashCode,
         '⚠️ 預算即將超支提醒',
-        '【$month月】累積支出 \$${monthlyExpense.toStringAsFixed(0)}，已使用 $percentage% 的預算',
+        '【$month月】累積支出 \$${AmountFormatter.format(monthlyExpense)}，已使用 $percentage% 的預算',
         const NotificationDetails(android: androidDetails),
       );
     }

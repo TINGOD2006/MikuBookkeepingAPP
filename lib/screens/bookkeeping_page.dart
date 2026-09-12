@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/record.dart';
@@ -5,6 +7,8 @@ import '../constants/app_colors.dart';
 import '../constants/categories.dart';
 import '../services/storage_service.dart';
 import '../services/message_service.dart';
+import '../services/notification_listener.dart';
+import '../utils/amount_formatter.dart';
 import '../widgets/month_picker_dialog.dart';
 
 class BookkeepingPage extends StatefulWidget {
@@ -14,11 +18,15 @@ class BookkeepingPage extends StatefulWidget {
   State<BookkeepingPage> createState() => BookkeepingPageState();
 }
 
-class BookkeepingPageState extends State<BookkeepingPage> {
+class BookkeepingPageState extends State<BookkeepingPage>
+    with WidgetsBindingObserver {
   List<Record> _allRecords = [];
   List<Record> _filteredRecords = [];
   bool _isLoading = true;
   final StorageService _storage = StorageService();
+
+  /// ✅ 自動記帳事件訂閱：通知一到就讓明細頁跟著更新
+  StreamSubscription<PaymentNotification>? _paymentSubscription;
 
   DateTime _selectedMonth = DateTime.now();
 
@@ -31,19 +39,51 @@ class BookkeepingPageState extends State<BookkeepingPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // ✅ 自動記錄完成後立即重新載入，避免「通知說已記錄、明細頁卻看不到」
+    _paymentSubscription = NotificationListenerService.paymentStream.listen(
+      _onPaymentRecorded,
+    );
     _loadRecords();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _paymentSubscription?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
   }
 
-  Future<void> _loadRecords() async {
+  /// ✅ App 回到前景時重新載入：App 未執行期間由原生端保存的記錄，
+  ///    會在下次載入時匯入明細。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadRecords(showLoading: false);
+    }
+  }
+
+  /// ✅ 自動記錄事件 → 重新載入清單並提示使用者
+  void _onPaymentRecorded(PaymentNotification event) {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+    _loadRecords(showLoading: false);
+
+    final record = event.record;
+    final sign = record.amount < 0 ? '-' : '+';
+    MessageService.showSnackBar(
+      '✅ 已自動記錄：${record.category} $sign${AmountFormatter.format(record.amount.abs())}',
+      key: 'auto_record_${record.id}',
+      color: Colors.green,
+    );
+  }
+
+  Future<void> _loadRecords({bool showLoading = true}) async {
+    if (!mounted) return;
+    if (showLoading) {
+      setState(() => _isLoading = true);
+    }
 
     try {
       _allRecords = await _storage.loadRecords();
@@ -429,7 +469,7 @@ class BookkeepingPageState extends State<BookkeepingPage> {
         ),
         const SizedBox(height: 1),
         Text(
-          amount.toStringAsFixed(0),
+          AmountFormatter.format(amount),
           style: const TextStyle(
             color: AppColor.text,
             fontSize: 14,
@@ -534,7 +574,7 @@ class BookkeepingPageState extends State<BookkeepingPage> {
               children: [
                 if (dailyExpense > 0)
                   Text(
-                    '⬇ ${dailyExpense.toStringAsFixed(0)}',
+                    '⬇ ${AmountFormatter.format(dailyExpense)}',
                     style: const TextStyle(
                       fontSize: 9,
                       color: Colors.redAccent,
@@ -545,7 +585,7 @@ class BookkeepingPageState extends State<BookkeepingPage> {
                   const SizedBox(width: 2),
                 if (dailyIncome > 0)
                   Text(
-                    '⬆ ${dailyIncome.toStringAsFixed(0)}',
+                    '⬆ ${AmountFormatter.format(dailyIncome)}',
                     style: const TextStyle(
                       fontSize: 9,
                       color: Colors.greenAccent,
@@ -558,7 +598,7 @@ class BookkeepingPageState extends State<BookkeepingPage> {
                   const SizedBox(width: 2),
                 ],
                 Text(
-                  '淨額 ${dailyTotal.abs().toStringAsFixed(0)}',
+                  '淨額 ${AmountFormatter.format(dailyTotal.abs())}',
                   style: TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w600,
@@ -699,8 +739,8 @@ class BookkeepingPageState extends State<BookkeepingPage> {
           ),
           Text(
             isExpense
-                ? '-${displayAmount.toStringAsFixed(0)}'
-                : displayAmount.toStringAsFixed(0),
+                ? '-${AmountFormatter.format(displayAmount)}'
+                : AmountFormatter.format(displayAmount),
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.bold,

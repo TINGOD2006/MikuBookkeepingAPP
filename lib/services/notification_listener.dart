@@ -10,6 +10,7 @@ import '../services/storage_service.dart';
 import '../services/ai_service.dart';
 import '../services/local_notification_service.dart';
 import '../services/message_service.dart';
+import '../utils/amount_formatter.dart';
 
 class NotificationListenerService {
   static const MethodChannel _channel = MethodChannel(
@@ -21,6 +22,33 @@ class NotificationListenerService {
   static StreamController<PaymentNotification>? _paymentStreamController;
 
   static bool _isInitialized = false;
+
+  // ============================================================
+  // ✅ 原生端 <-> Dart 的處理結果協定
+  //
+  // 原生端只有在收到 [statusSaved] / [statusDuplicate] 時才會把該筆通知
+  // 標記為「已處理」；其他狀態（含逾時或 Dart 端已不存在）都會回退成
+  // 原生端自行保存，確保通知不會在兩邊都沒被記下來。
+  // ============================================================
+
+  /// 已確實寫入明細
+  static const String statusSaved = 'saved';
+
+  /// 重複通知，先前已記錄過（不需再記一次，也不算失敗）
+  static const String statusDuplicate = 'duplicate';
+
+  /// 使用者已關閉自動記錄：不記錄，但也不算失敗
+  static const String statusDisabled = 'disabled';
+
+  /// 判定為「非交易通知」（例如廣告推播）：不記錄，也不算失敗。
+  ///
+  /// 與 [statusDisabled] 的差別：這是針對「這一則通知的內容」判斷，
+  /// 必須標記為已處理避免重複判斷，且原生端**不可**回退成自行保存，
+  /// 否則廣告又會被記進明細。
+  static const String statusIgnored = 'ignored';
+
+  /// 處理失敗：原生端應回退保存，且不要標記為已處理
+  static const String statusFailed = 'failed';
 
   // ✅ Flutter 端去重快取（記憶體）
   static final Set<String> _processedIds = {};
@@ -137,11 +165,19 @@ class NotificationListenerService {
   }
 
   /// ✅ 處理來自 Android 端的 MethodCall
+  ///
+  /// 回傳值是給原生端判斷「這筆通知到底有沒有被記下來」的依據，
+  /// 因此**不可**在這裡把例外吞掉後仍回報成功。
   static Future<dynamic> _handleMethodCall(MethodCall call) async {
     if (call.method == 'onPaymentNotification') {
       final String data = call.arguments as String;
-      await _processPaymentNotification(data);
-      return true;
+      try {
+        return await _processPaymentNotification(data);
+      } catch (e, stack) {
+        debugPrint('❌ 處理支付通知失敗: $e\n$stack');
+        // ✅ 回報失敗，讓原生端回退成自行保存，而不是無聲丟掉這筆記錄
+        return statusFailed;
+      }
     }
     throw PlatformException(
       code: 'NOT_IMPLEMENTED',
@@ -150,7 +186,9 @@ class NotificationListenerService {
   }
 
   /// ✅ 處理支付通知
-  static Future<void> _processPaymentNotification(String data) async {
+  ///
+  /// 回傳 [statusSaved] / [statusDuplicate] / [statusDisabled] / [statusFailed]。
+  static Future<String> _processPaymentNotification(String data) async {
     // ✅ 併發去重：同一時間只處理一筆相同 eventId 的通知
     String? rawId;
     try {
@@ -162,33 +200,61 @@ class NotificationListenerService {
     if (rawId != null && rawId.isNotEmpty) {
       if (!MessageService.beginProcess('notif_$rawId')) {
         debugPrint('⏭️ 通知處理中，跳過重複請求: $rawId');
-        return;
+        // 同一筆通知的另一個請求正在處理中，對原生端而言等同已處理
+        return statusDuplicate;
       }
     }
 
     try {
-      final json = jsonDecode(data);
-      final amount = (json['amount'] as num).toDouble();
-      final merchant = json['merchant'] as String? ?? '';
+      final json = jsonDecode(data) as Map<String, dynamic>;
+      // ✅ 容錯：若原生端未提供/提供失敗金額，改從原文提取
+      double? amount = (json['amount'] as num?)?.toDouble();
+      var merchant = json['merchant'] as String? ?? '';
       final text = json['text'] as String? ?? '';
       final eventId = json['eventId'] as String? ?? '';
+      // ✅ 方向：true=收入（收到錢），false/缺省=支出（付錢出去）
+      final isIncome = json['isIncome'] as bool? ?? false;
 
-      debugPrint('💰 收到支付通知: 金額=$amount, 商家=$merchant');
+      // ✅ 第二道防線：同一包名也會發行銷推播，必須確認符合已知交易格式。
+      //    （原生端已先過濾一次，這裡避免原生端規則漏掉時把廣告記進明細；
+      //      回報 statusIgnored 讓原生端「不要」回退保存這筆通知。）
+      if (!AIService.isPaymentNotificationText(text)) {
+        debugPrint('📢 非交易通知（廣告或格式不符），略過: $text');
+        if (eventId.isNotEmpty) {
+          await _saveProcessedId(eventId);
+        }
+        return statusIgnored;
+      }
+
+      if (amount == null || amount <= 0) {
+        amount = AIService.extractAmount(text);
+        if (amount == null || amount <= 0) {
+          debugPrint('🚫 無法從通知中提取金額: $text');
+          return statusFailed;
+        }
+      }
+      if (merchant.isEmpty) {
+        merchant = AIService.extractMerchant(text) ?? '';
+      }
+
+      debugPrint(
+        '💰 收到支付通知: 金額=$amount, 對象=$merchant, 方向=${isIncome ? '收入' : '支出'}',
+      );
 
       // ✅ 檢查是否已處理過（Flutter 端去重）
       if (eventId.isNotEmpty && _isAlreadyProcessed(eventId)) {
         debugPrint('⏭️ Flutter 端跳過重複通知: $eventId');
-        return;
+        return statusDuplicate;
       }
 
       // ✅ 檢查自動記錄是否啟用
       final enabled = await isAutoRecordEnabled();
       if (!enabled) {
         debugPrint('⏸️ 自動記錄已停用，跳過');
-        return;
+        return statusDisabled;
       }
 
-      // ✅ 分類
+      // ✅ 分類（轉帳類別優先，其他支付類型走原本分類）
       final prefs = await SharedPreferences.getInstance();
       final useAI = prefs.getBool('use_ai_classification') ?? true;
 
@@ -196,16 +262,31 @@ class NotificationListenerService {
       if (useAI) {
         classification = await AIService.classifyNotification(text);
       } else {
-        classification = AIService.localClassify(text);
+        // ✅ 規則表分類：讀取用戶自訂規則（含內建規則）
+        classification = await AIService.localClassifyAsync(text);
+      }
+
+      // ✅ 建立備註：優先記錄「轉帳給 XXX / 收到 XXX 轉帳」
+      final isTransfer = text.contains('轉賬') ||
+          text.contains('轉帳') ||
+          text.contains('转账') ||
+          text.contains('transfer');
+      String note;
+      if (isTransfer && merchant.isNotEmpty) {
+        note = isIncome ? '收到 $merchant 轉帳' : '轉帳給 $merchant';
+      } else if (isTransfer) {
+        note = isIncome ? '轉賬收入' : '轉賬支出';
+      } else {
+        note = merchant.isNotEmpty
+            ? '$merchant - ${classification.note}'
+            : classification.note;
       }
 
       // ✅ 創建記錄
       final record = Record(
-        amount: -amount,
+        amount: isIncome ? amount : -amount,
         category: classification.category,
-        note: merchant.isNotEmpty
-            ? '$merchant - ${classification.note}'
-            : classification.note,
+        note: note,
         date: DateTime.now(),
         createdAt: DateTime.now(),
         id: eventId.isNotEmpty
@@ -213,7 +294,7 @@ class NotificationListenerService {
             : DateTime.now().millisecondsSinceEpoch.toString(),
       );
 
-      // ✅ 儲存記錄
+      // ✅ 儲存記錄（這一步成功才算「已記錄」）
       await _storage.addRecord(record);
 
       // ✅ 標記為已處理
@@ -221,10 +302,7 @@ class NotificationListenerService {
         await _saveProcessedId(eventId);
       }
 
-      // ✅ 通知（系統通知與預算提醒皆已內建去重）
-      await LocalNotificationService.showRecordAdded(record);
-      await LocalNotificationService.checkAndShowBudgetAlert(record);
-
+      // ✅ 立刻通知畫面更新，不等待後續的通知／預算查詢
       _paymentStreamController?.add(
         PaymentNotification(
           record: record,
@@ -233,12 +311,28 @@ class NotificationListenerService {
         ),
       );
 
+      // ⚠️ 系統通知與預算提醒屬於「加值顯示」，失敗不可影響記錄結果
+      //    （否則原生端會誤判為記錄失敗而重複保存）
+      try {
+        await LocalNotificationService.showRecordAdded(record);
+      } catch (e) {
+        debugPrint('⚠️ 顯示記帳通知失敗（不影響記錄）: $e');
+      }
+      try {
+        await LocalNotificationService.checkAndShowBudgetAlert(record);
+      } catch (e) {
+        debugPrint('⚠️ 預算提醒失敗（不影響記錄）: $e');
+      }
+
       debugPrint(
-        '✅ 自動記帳成功: ${record.category} - \$${amount.toStringAsFixed(0)}',
+        '✅ 自動記帳成功: ${record.category} - ${record.note} - '
+        '\$${AmountFormatter.format(amount)}',
       );
-    } catch (e) {
-      debugPrint('❌ 處理支付通知失敗: $e');
-      // ✅ 不標記為已處理，允許重試
+      return statusSaved;
+    } catch (e, stack) {
+      debugPrint('❌ 處理支付通知失敗: $e\n$stack');
+      // ✅ 不標記為已處理，回報失敗讓原生端接手保存
+      return statusFailed;
     } finally {
       if (rawId != null && rawId.isNotEmpty) {
         MessageService.endProcess('notif_$rawId');
@@ -251,6 +345,29 @@ class NotificationListenerService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('auto_record_enabled', enabled);
     debugPrint('🔄 自動記帳已${enabled ? "啟用" : "停用"}');
+  }
+
+  /// 檢查 App 是否已獲得 Android「通知使用權限」（Notification Listener Access）。
+  /// 若未獲得，onNotificationPosted 永遠不會被系統呼叫，自動記帳自然失效。
+  static Future<bool> isNotificationAccessEnabled() async {
+    try {
+      final granted = await _channel.invokeMethod<bool>(
+        'isNotificationAccessEnabled',
+      );
+      return granted ?? false;
+    } catch (e) {
+      debugPrint('⚠️ 檢查通知使用權限失敗: $e');
+      return false;
+    }
+  }
+
+  /// 開啟系統「通知使用權限」設定頁
+  static Future<void> openNotificationAccessSettings() async {
+    try {
+      await _channel.invokeMethod<void>('openNotificationAccessSettings');
+    } catch (e) {
+      debugPrint('⚠️ 開啟通知使用權限設定失敗: $e');
+    }
   }
 
   /// 更新後台常駐通知設定

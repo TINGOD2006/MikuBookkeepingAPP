@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,10 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants/app_colors.dart';
+import '../constants/categories.dart';
 import '../services/storage_service.dart';
 import '../services/notification_listener.dart';
 import '../services/ai_service.dart';
 import '../services/message_service.dart';
+import '../utils/amount_formatter.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -163,11 +166,32 @@ class _ProfilePageState extends State<ProfilePage> {
       _autoRecordEnabled = value;
     });
 
-    MessageService.showSnackBar(
-      value ? '✅ 自動記錄已開啟' : 'ℹ️ 自動記錄已關閉',
-      color: value ? Colors.green : Colors.orange,
-      duration: const Duration(seconds: 2),
-    );
+    if (value) {
+      // ✅ 檢查「通知使用權限」：若未授予，通知監聽服務永遠收不到通知，
+      //    自動記帳形同失效，必須引導用戶去系統設定開啟。
+      final granted =
+          await NotificationListenerService.isNotificationAccessEnabled();
+      if (!granted) {
+        MessageService.showSnackBar(
+          '⚠️ 尚未開啟「通知使用權限」，自動記帳無法運作，請在系統設定中允許 Miku 記帳',
+          color: Colors.orange,
+          duration: const Duration(seconds: 5),
+        );
+        await NotificationListenerService.openNotificationAccessSettings();
+      } else {
+        MessageService.showSnackBar(
+          '✅ 自動記錄已開啟',
+          color: Colors.green,
+          duration: const Duration(seconds: 2),
+        );
+      }
+    } else {
+      MessageService.showSnackBar(
+        'ℹ️ 自動記錄已關閉',
+        color: Colors.orange,
+        duration: const Duration(seconds: 2),
+      );
+    }
   }
 
   // ========== ✅ 切換 AI 分類（只控制分類方式） ==========
@@ -696,12 +720,12 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               _buildStatItem(
                 label: '總支出',
-                value: '\$${_totalExpense.toStringAsFixed(0)}',
+                value: '\$${AmountFormatter.format(_totalExpense)}',
                 color: Colors.redAccent,
               ),
               _buildStatItem(
                 label: '總收入',
-                value: '\$${_totalIncome.toStringAsFixed(0)}',
+                value: '\$${AmountFormatter.format(_totalIncome)}',
                 color: Colors.greenAccent,
               ),
               _buildStatItem(
@@ -861,6 +885,16 @@ class _ProfilePageState extends State<ProfilePage> {
             trailing: TextButton(
               onPressed: _showAllowedPackagesDialog,
               child: const Text('管理', style: TextStyle(color: AppColor.primary)),
+            ),
+          ),
+
+          // ✅ 新增：分類規則表管理（用戶自訂詞條）
+          _buildSettingsItem(
+            icon: Icons.rule_outlined,
+            label: '分類規則表',
+            trailing: TextButton(
+              onPressed: _showRulesTableDialog,
+              child: const Text('編輯', style: TextStyle(color: AppColor.primary)),
             ),
           ),
 
@@ -1187,5 +1221,245 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       },
     );
+  }
+
+  // ========== 分類規則表管理對話框 ==========
+  Future<void> _showRulesTableDialog() async {
+    final BuildContext currentContext = context;
+
+    // 讀取有效規則表（內建 + 用戶自訂）
+    final rules = await AIService.loadRules();
+
+    // 分類順序：先列用戶有編輯的，再列內建其餘
+    final customPrefs = await SharedPreferences.getInstance();
+    final customJson = customPrefs.getString(AIService.prefCustomRules);
+    Map<String, dynamic>? customMap;
+    if (customJson != null && customJson.isNotEmpty) {
+      try {
+        customMap = jsonDecode(customJson) as Map<String, dynamic>;
+      } catch (_) {}
+    }
+
+    if (!currentContext.mounted) return;
+
+    await showDialog(
+      context: currentContext,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            // 可用的分類清單（支出 + 收入）
+            final categories = <String>[
+              ...CategoryData.getExpenseCategories().map((c) => c.name),
+              ...CategoryData.getIncomeCategories().map((c) => c.name),
+            ];
+            // 確保規則表有的分類也在清單中
+            for (final cat in rules.keys) {
+              if (!categories.contains(cat)) categories.add(cat);
+            }
+
+            return AlertDialog(
+              backgroundColor: AppColor.background,
+              title: const Text(
+                '分類規則表',
+                style: TextStyle(color: AppColor.text, fontSize: 18),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      '為每個分類設定觸發詞條（例如「麥當勞」→ 食物）。自動記帳時通知文字含詞條即歸入該分類。',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: categories.length,
+                        separatorBuilder: (context, _) =>
+                            const Divider(height: 1),
+                        itemBuilder: (context, index) {                          final cat = categories[index];
+                          final words = rules[cat] ?? [];
+                          final isCustom = customMap?.containsKey(cat) ?? false;
+                          return ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              isCustom ? Icons.edit : Icons.rule,
+                              color: isCustom
+                                  ? AppColor.primary
+                                  : AppColor.textSecondary,
+                              size: 20,
+                            ),
+                            title: Text(
+                              cat,
+                              style: const TextStyle(
+                                color: AppColor.text,
+                                fontSize: 14,
+                              ),
+                            ),
+                            subtitle: Text(
+                              words.isEmpty
+                                  ? '（無詞條）'
+                                  : words.take(6).join('、') +
+                                      (words.length > 6 ? ' …共${words.length}個' : ''),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColor.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                            trailing: TextButton(
+                              onPressed: () async {
+                                // 編輯該分類詞條
+                                final edited = await _editCategoryRulesDialog(
+                                  context,
+                                  cat,
+                                  words,
+                                );
+                                if (edited != null) {
+                                  setStateDialog(() {
+                                    rules[cat] = edited;
+                                    customMap ??= {};
+                                    customMap![cat] = edited;
+                                  });
+                                }
+                              },
+                              child: const Text(
+                                '編輯',
+                                style: TextStyle(color: AppColor.primary),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () async {
+                            await AIService.resetRules();
+                            if (currentContext.mounted) {
+                              Navigator.pop(currentContext);
+                              MessageService.showSnackBar(
+                                '✅ 已恢復內建預設規則',
+                                color: Colors.green,
+                              );
+                            }
+                          },
+                          child: const Text(
+                            '恢復預設',
+                            style: TextStyle(color: Colors.orange),
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text(
+                            '取消',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColor.primary,
+                          ),
+                          onPressed: () async {
+                            // 儲存：只存用戶有編輯過的分類
+                            final toSave = <String, List<String>>{};
+                            customMap?.forEach((cat, value) {
+                              final list = (value as List)
+                                  .whereType<String>()
+                                  .toList();
+                              if (list.isNotEmpty) toSave[cat] = list;
+                            });
+                            await AIService.saveCustomRules(toSave);
+                            if (currentContext.mounted) {
+                              Navigator.pop(currentContext);
+                              MessageService.showSnackBar(
+                                '✅ 分類規則已更新',
+                                color: Colors.green,
+                              );
+                            }
+                          },
+                          child: const Text('儲存'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ========== 編輯單一分類詞條對話框 ==========
+  Future<List<String>?> _editCategoryRulesDialog(
+    BuildContext context,
+    String category,
+    List<String> currentWords,
+  ) async {
+    final controller = TextEditingController(text: currentWords.join('\n'));
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColor.background,
+          title: Text(
+            '編輯「$category」詞條',
+            style: const TextStyle(color: AppColor.text, fontSize: 16),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '每行一個詞條，通知文字包含任一詞條即歸入此分類。',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                maxLines: 8,
+                minLines: 4,
+                style: const TextStyle(color: AppColor.text, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: '例如：\n麥當勞\n漢堡王\n肯德基',
+                  hintStyle: TextStyle(color: Colors.grey[600]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.all(8),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColor.primary),
+              onPressed: () {
+                final words = controller.text
+                    .split('\n')
+                    .map((w) => w.trim())
+                    .where((w) => w.isNotEmpty)
+                    .toList();
+                Navigator.pop(context, words);
+              },
+              child: const Text('確定'),
+            ),
+          ],
+        );
+      },
+    );
+    return result;
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
+import '../utils/amount_formatter.dart';
 
 class SummaryItem extends StatelessWidget {
   final String label;
@@ -27,7 +28,7 @@ class SummaryItem extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          amount.toStringAsFixed(0), // ✅ 移除 $ 符號
+          AmountFormatter.format(amount), // ✅ 移除 $ 符號
           style: TextStyle(
             color: color,
             fontSize: 20,

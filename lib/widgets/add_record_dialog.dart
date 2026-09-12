@@ -3,6 +3,7 @@ import '../constants/app_colors.dart';
 import '../constants/categories.dart';
 import '../models/record.dart';
 import '../services/message_service.dart';
+import '../utils/amount_formatter.dart';
 import 'add_category_dialog.dart';
 
 class AddRecordDialog extends StatefulWidget {
@@ -24,12 +25,18 @@ class _AddRecordDialogState extends State<AddRecordDialog> {
 
   DateTime _selectedDate = DateTime.now();
 
+  /// 數字鍵盤前三列（最後一欄依序是 ⌫ / 清空 / 小數點），最後一列是加寬的 0。
   static const List<String> _numberKeys = [
-    '7', '8', '9',
-    '4', '5', '6',
-    '1', '2', '3',
-    '清空', '0', '⌫',
+    '7', '8', '9', '⌫',
+    '4', '5', '6', '清空',
+    '1', '2', '3', '.',
   ];
+
+  /// 數字鍵盤每列顯示幾顆按鍵。
+  static const int _keysPerRow = 4;
+
+  /// 整數部分最多幾位數（避免金額過長超出顯示寬度）。
+  static const int _maxIntegerDigits = 9;
 
   List<CategoryItem> _getCategoriesByType(String type) {
     return CategoryData.getCategories(type);
@@ -355,7 +362,7 @@ Future<void> _selectDate() async {
                 ],
               ),
               Text(
-                _formatAmount(_amount),
+                AmountFormatter.formatInput(_amount),
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -433,39 +440,29 @@ Future<void> _selectDate() async {
   }
 
   Widget _buildNumberPad() {
-    return Column(
-      children: [
+    final rows = <Widget>[];
+    for (var i = 0; i < _numberKeys.length; i += _keysPerRow) {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 4));
+      rows.add(
         Row(
-          children: _numberKeys.sublist(0, 3).map((key) {
-            return _buildKeyButton(key);
-          }).toList(),
+          children: _numberKeys
+              .sublist(i, i + _keysPerRow)
+              .map((key) => _buildKeyButton(key))
+              .toList(),
         ),
-        const SizedBox(height: 4),
-        Row(
-          children: _numberKeys.sublist(3, 6).map((key) {
-            return _buildKeyButton(key);
-          }).toList(),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: _numberKeys.sublist(6, 9).map((key) {
-            return _buildKeyButton(key);
-          }).toList(),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: _numberKeys.sublist(9, 12).map((key) {
-            return _buildKeyButton(key);
-          }).toList(),
-        ),
-      ],
-    );
+      );
+    }
+    rows.add(const SizedBox(height: 4));
+    // ✅ 「0」佔滿整列，小數點才能在不犧牲「清空」的情況下加入鍵盤
+    rows.add(Row(children: [_buildKeyButton('0', flex: _keysPerRow)]));
+    return Column(children: rows);
   }
 
-  Widget _buildKeyButton(String key) {
+  Widget _buildKeyButton(String key, {int flex = 1}) {
     bool isSpecial = key == '清空' || key == '⌫';
 
     return Expanded(
+      flex: flex,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 3),
         child: GestureDetector(
@@ -504,16 +501,33 @@ Future<void> _selectDate() async {
         } else {
           _amount = '0';
         }
+      } else if (key == '.') {
+        _appendDecimalPoint();
       } else {
-        if (_amount == '0') {
-          _amount = key;
-        } else {
-          if (_amount.length < 10) {
-            _amount += key;
-          }
-        }
+        _appendDigit(key);
       }
     });
+  }
+
+  /// ✅ 加入小數點（一份金額最多一個小數點）
+  void _appendDecimalPoint() {
+    if (_amount.contains('.')) return;
+    _amount = _amount.isEmpty ? '0.' : '$_amount.';
+  }
+
+  /// ✅ 加入數字：小數點後最多兩位，整數部分最多 [_maxIntegerDigits] 位
+  void _appendDigit(String digit) {
+    final dotIndex = _amount.indexOf('.');
+
+    if (dotIndex >= 0) {
+      final decimalDigits = _amount.length - dotIndex - 1;
+      if (decimalDigits >= AmountFormatter.decimalPlaces) return;
+      _amount = '$_amount$digit';
+      return;
+    }
+
+    if (_amount.length >= _maxIntegerDigits) return;
+    _amount = _amount == '0' ? digit : '$_amount$digit';
   }
 
   Widget _buildSaveButton() {
@@ -549,15 +563,6 @@ Future<void> _selectDate() async {
     return category?.icon ?? Icons.category;
   }
 
-  String _formatAmount(String amount) {
-    if (amount.isEmpty) return '0';
-    final num = int.parse(amount);
-    return num.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]},',
-    );
-  }
-
   Future<void> _saveRecord() async {
     final BuildContext currentContext = context;
 
@@ -570,7 +575,7 @@ Future<void> _selectDate() async {
       return;
     }
 
-    final amount = double.tryParse(_amount) ?? 0;
+    final amount = AmountFormatter.round(double.tryParse(_amount) ?? 0);
     if (amount <= 0) {
       _showSnackBar(currentContext, '請輸入有效金額！', Colors.red);
       return;

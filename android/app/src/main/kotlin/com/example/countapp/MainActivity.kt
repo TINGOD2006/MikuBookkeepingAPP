@@ -26,6 +26,11 @@ class MainActivity : FlutterActivity() {
                         NotificationListenerService.setForegroundNotification(enabled)
                     )
                 }
+                "isNotificationAccessEnabled" -> {
+                    result.success(
+                        NotificationListenerService.isNotificationAccessGranted(this)
+                    )
+                }
                 "openNotificationAccessSettings" -> {
                     startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     result.success(true)
@@ -33,5 +38,17 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    /**
+     * ✅ Flutter engine 被銷毀時清空方法通道參照。
+     *
+     * 通知監聽服務與前台服務會讓行程繼續存活，因此 App 被滑掉後
+     * NotificationListenerService.methodChannel 仍會指向已銷毀的 engine，
+     * 送出的記錄不但到不了 Dart，還會被誤判為「已處理」而永久消失。
+     */
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        NotificationListenerService.setMethodChannel(null)
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 }

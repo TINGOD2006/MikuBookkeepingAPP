@@ -4,6 +4,7 @@ import '../constants/app_colors.dart';
 import '../services/storage_service.dart';
 import '../services/local_notification_service.dart';
 import '../services/message_service.dart';
+import '../utils/amount_formatter.dart';
 import '../widgets/month_picker_dialog.dart';
 
 class BudgetPage extends StatefulWidget {
@@ -98,8 +99,8 @@ class _BudgetPageState extends State<BudgetPage> {
       return;
     }
 
-    final amount = double.tryParse(text);
-    if (amount == null || amount <= 0) {
+    final amount = AmountFormatter.round(double.tryParse(text) ?? 0);
+    if (amount <= 0) {
       _showSnackBar('請輸入有效的預算金額', Colors.red);
       return;
     }
@@ -135,7 +136,9 @@ class _BudgetPageState extends State<BudgetPage> {
 
   // ========== 開始編輯預算 ==========
   void _startEditing() {
-    _budgetController.text = _budgetAmount?.toStringAsFixed(0) ?? '';
+    _budgetController.text = _budgetAmount != null
+        ? AmountFormatter.format(_budgetAmount!)
+        : '';
     setState(() {
       _isEditing = true;
     });
@@ -358,7 +361,7 @@ class _BudgetPageState extends State<BudgetPage> {
               children: [
                 Text(
                   _budgetAmount != null
-                      ? '\$${_budgetAmount!.toStringAsFixed(0)}'
+                      ? '\$${AmountFormatter.format(_budgetAmount!)}'
                       : '未設定',
                   style: TextStyle(
                     fontSize: 28,
@@ -404,7 +407,7 @@ class _BudgetPageState extends State<BudgetPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '\$${_monthlyExpense.toStringAsFixed(0)}',
+                  '\$${AmountFormatter.format(_monthlyExpense)}',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -426,7 +429,7 @@ class _BudgetPageState extends State<BudgetPage> {
                 const SizedBox(height: 4),
                 Text(
                   _budgetAmount != null
-                      ? '\$${_remainingBudget.toStringAsFixed(0)}'
+                      ? '\$${AmountFormatter.format(_remainingBudget)}'
                       : '--',
                   style: TextStyle(
                     fontSize: 24,
@@ -526,7 +529,7 @@ class _BudgetPageState extends State<BudgetPage> {
                 ),
               ),
               Text(
-                hasBudget ? _budgetAmount!.toStringAsFixed(0) : '--',
+                hasBudget ? AmountFormatter.format(_budgetAmount!) : '--',
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppColor.textSecondary,
@@ -566,7 +569,7 @@ class _BudgetPageState extends State<BudgetPage> {
                   ),
                 ),
                 Text(
-                  '本月已超出 \$${overAmount.toStringAsFixed(0)}',
+                  '本月已超出 \$${AmountFormatter.format(overAmount)}',
                   style: const TextStyle(fontSize: 14, color: Colors.red),
                 ),
               ],

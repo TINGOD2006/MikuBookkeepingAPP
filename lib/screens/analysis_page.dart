@@ -4,6 +4,7 @@ import '../constants/app_colors.dart';
 import '../constants/categories.dart';
 import '../models/record.dart';
 import '../services/storage_service.dart';
+import '../utils/amount_formatter.dart';
 
 class AnalysisPage extends StatefulWidget {
   const AnalysisPage({super.key});
@@ -275,7 +276,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
             ),
           ),
           Text(
-            '\$${total.toStringAsFixed(0)}',
+            '\$${AmountFormatter.format(total)}',
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -320,7 +321,8 @@ class _AnalysisPageState extends State<AnalysisPage> {
           0.0,
           (sum, record) => sum + record.amount.abs(),
         ),
-        centerText: '\$${_filteredRecords.fold(0.0, (sum, r) => sum + r.amount.abs()).toStringAsFixed(0)}',
+        centerText:
+            '\$${AmountFormatter.format(_filteredRecords.fold(0.0, (sum, r) => sum + r.amount.abs()))}',
       ),
       size: const Size(double.infinity, double.infinity),
     );
@@ -477,7 +479,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
               ),
               // 金額
               Text(
-                '\$${stat.amount.toStringAsFixed(0)}',
+                '\$${AmountFormatter.format(stat.amount)}',
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
