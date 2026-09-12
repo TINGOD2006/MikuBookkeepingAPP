@@ -54,11 +54,17 @@ class NotificationListenerService {
   static final Set<String> _processedIds = {};
   static const int _maxCacheSize = 500;
 
-  /// 預設支援的支付應用包名列表
+  /// 預設支援的支付應用包名列表（開箱即用）。
+  ///
+  /// ⚠️ Android 原生端 [getAllowedPackages] 有一份必須保持同步的鏡像，
+  ///    位置：android/app/src/main/kotlin/com/example/countapp/NotificationListenerService.kt
   static const List<String> defaultAllowedPackages = [
-    'com.macaupass.rechargeEasy', // MPay / Macau Pass
-    'com.alipay.android.app', // 支付寶
-    'com.tencent.mm', // 微信
+    'com.tencent.mm', // 微信／微信支付
+    'com.eg.android.AlipayGphone', // 支付寶（中國本體）
+    'hk.alipay.wallet', // AlipayHK
+    // 支付寶 SDK／安全支付：部分交易只有這個套件會發通知，一併保留
+    'com.alipay.android.app',
+    'com.macaupass.rechargeEasy', // MPay / Macau Pass 澳門通
     'com.google.android.apps.wallet', // Google Pay / Google Wallet
     'com.apple.wallet', // Apple Wallet
     'com.octopus.nfc', // 八達通
@@ -67,20 +73,58 @@ class NotificationListenerService {
   ];
 
   /// 取得允許的包名列表
+  ///
+  /// ⚠️ 一定要回傳「可修改」的清單：呼叫端（白名單管理對話框）會直接對它
+  ///    呼叫 add/removeAt。舊版在沒有自訂清單時直接回傳 const 的
+  ///    [defaultAllowedPackages]，使用者一按「新增」就會拋
+  ///    Unsupported operation: Cannot add to an unmodifiable list。
   static Future<List<String>> getAllowedPackages() async {
     final prefs = await SharedPreferences.getInstance();
     final custom = prefs.getStringList('allowed_package_names');
     if (custom != null && custom.isNotEmpty) {
-      return custom;
+      return List<String>.from(custom);
     }
-    return defaultAllowedPackages;
+    return List<String>.from(defaultAllowedPackages);
   }
 
   /// 設定允許的包名列表
   static Future<void> setAllowedPackages(List<String> packages) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('allowed_package_names', packages);
+    await _mirrorAllowedPackagesToNative(prefs, packages);
     debugPrint('🔄 已更新允許的包名白名單: $packages');
+  }
+
+  /// 白名單的「原生端鏡像」鍵。
+  ///
+  /// ⚠️ 為什麼需要這份鏡像：
+  ///    shared_preferences 的 StringList 在 Android 上**不是**存成 JSON，
+  ///    而是 `"VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu"` +
+  ///    Java 序列化的 Base64。原生端用 JSONArray() 解析一定拋例外，
+  ///    然後靜默退回預設白名單——也就是使用者自訂的包名在原生端完全失效。
+  ///    這裡另外寫一份純 JSON 字串（String 不會被加工）給原生端讀。
+  static const String nativeMirrorKey = 'allowed_package_names_json';
+
+  static Future<void> _mirrorAllowedPackagesToNative(
+    SharedPreferences prefs,
+    List<String> packages,
+  ) async {
+    await prefs.setString(nativeMirrorKey, jsonEncode(packages));
+  }
+
+  /// 把目前有效的白名單同步給原生端。
+  ///
+  /// ✅ App 每次啟動都呼叫一次：這樣即使使用者是在舊版設定的白名單
+  ///    （只有 StringList、原生端讀不到），也會自動補上鏡像，不必重新設定。
+  static Future<void> syncAllowedPackagesToNative() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final packages = await getAllowedPackages();
+      await _mirrorAllowedPackagesToNative(prefs, packages);
+      debugPrint('🔄 已同步白名單到原生端: ${packages.length} 個包名');
+    } catch (e) {
+      debugPrint('⚠️ 同步白名單到原生端失敗: $e');
+    }
   }
 
   /// 檢查特定包名是否在白名單中
@@ -113,6 +157,9 @@ class NotificationListenerService {
 
     // ✅ 載入已處理的通知 ID 到記憶體快取
     await _loadProcessedIds();
+
+    // ✅ 把白名單同步成原生端讀得懂的格式（含舊版設定的自訂清單）
+    await syncAllowedPackagesToNative();
 
     final enabled = await isAutoRecordEnabled();
     if (enabled) {

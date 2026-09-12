@@ -35,6 +35,21 @@ class MainActivity : FlutterActivity() {
                     startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     result.success(true)
                 }
+                // ===== 無障礙讀屏探針（可行性驗證用） =====
+                "isAccessibilityProbeEnabled" -> {
+                    result.success(PaymentAccessibilityService.isEnabled(this))
+                }
+                "openAccessibilitySettings" -> {
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    result.success(true)
+                }
+                "getAccessibilityProbeLogs" -> {
+                    result.success(PaymentAccessibilityService.readLogs(this))
+                }
+                "clearAccessibilityProbeLogs" -> {
+                    PaymentAccessibilityService.clearLogs(this)
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }

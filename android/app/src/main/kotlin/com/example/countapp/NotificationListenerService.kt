@@ -60,80 +60,30 @@ class NotificationListenerService : AndroidNotificationListenerService() {
         /** 原生端暫存記錄的鍵前綴（實際鍵為 "flutter." + 此前綴 + eventId） */
         private const val NATIVE_RECORD_KEY_PREFIX = "native_record_"
 
-        // ============================================================
-        // ✅ 通知過濾規則（與 Dart 端 lib/services/ai_service.dart 保持同步）
-        //
-        //    問題：支付 App 的行銷推播與真實交易通知來自「同一個包名」，
-        //    舊版只要求「白名單包名 + 任一寬鬆關鍵字」，而關鍵字裡包含
-        //    單獨的「成功」「交易」「$」以及 App 名稱「MPay」——這些在
-        //    廣告文案裡同樣會出現，於是「海鮮自助晚餐 268起」這類廣告
-        //    也被當成一筆交易記錄下來。
-        //
-        //    現在的規則改為三段式，必須「全部通過」才記錄：
+        // ✅ 通知過濾規則已集中到 PaymentTextAnalyzer，與無障礙探針共用同一套規則：
         //      1. 包名必須在白名單內
         //      2. 出現硬廣告字樣 → 直接丟棄
         //      3. 必須命中「已知交易格式」才記錄（不再用寬鬆關鍵字）
-        // ============================================================
 
         /**
-         * 硬廣告字樣：真實的交易通知（付款/轉賬成功）不會出現這些行銷用語。
+         * 預設支援的支付應用包名（開箱即用）。
          *
-         * ⚠️ 只收錄「明確屬於推廣文案」的詞，避免誤殺真實交易。
-         *    例如「訂閱」「自助餐」「元」等可能出現在正常消費描述中的詞
-         *    刻意不收錄。
+         * ⚠️ 與 Dart 端 NotificationListenerService.defaultAllowedPackages
+         *    必須保持同步：
+         *    lib/services/notification_listener.dart
          */
-        private val AD_MARKERS = listOf(
-            "秒殺", "搶購", "限量", "特價", "抵價", "至抵", "震撼價", "優惠價",
-            "優惠券", "優惠碼", "限時優惠", "獨家優惠", "會員優惠", "生日優惠",
-            "折扣", "半價", "五折", "折上折", "買一送一",
-            "抽獎", "中獎", "恭喜", "著數", "快閃", "期間限定", "有獎活動",
-            "免費領取", "立即下載", "立即搶", "即刻入", "新品上市",
-            "尊享", "專享", "推廣", "廣告", "推薦好友", "邀請碼", "填問卷",
-            "積分兌換", "限量發售"
-        )
-
-        /**
-         * 已知的交易通知格式。必須命中其中一項，才可能是真實交易。
-         *
-         * 這裡刻意只收錄「交易結果」的固定語句，而不是單獨的「支付」
-         * 「交易」「成功」等字，因為那些字在廣告文案中也會出現。
-         */
-        private val PAYMENT_SIGNAL_PATTERNS = listOf(
-            // 支付／交易／轉賬 + 結果：支付成功、交易成功、轉賬成功、付款完成
-            Regex(
-                """(?:支付|付款|交易|消費|扣款|刷卡|匯款|汇款|轉賬|轉帳|转账|轉出|轉入)\s*(?:成功|完成|已成功|失敗|失败)"""
-            ),
-            // 結果 + 動作：成功交易、成功轉賬、成功付款
-            Regex(
-                """成功\s*(?:支付|付款|交易|轉賬|轉帳|转账|消費|扣款|匯款|轉出|轉入)"""
-            ),
-            // 已支付／已扣款／已轉賬
-            Regex(
-                """(?:已|經|经)\s*(?:支付|付款|扣款|轉賬|轉帳|转账|匯出|匯入|收款|消費)"""
-            ),
-            // 轉賬動詞本身（廣告文案不會出現「轉賬／轉帳」）
-            Regex("""(?:轉賬|轉帳|转账|轉出|轉入|匯出|匯入|匯款|汇款)"""),
-            // 收到款項：收到 XXX 轉賬、入賬 MOP100
-            Regex(
-                """(?:收到|入賬|入帳).{0,12}(?:轉賬|轉帳|转账|款項|金額|MOP|HK)"""
-            ),
-            // 支付名詞 + 帶貨幣標記的金額，例如「消費 HK$1,234.50」「交易 MOP50」
-            // （銀行／支付 App 的對帳通知常沒有「成功」字樣；
-            //   但金額必須帶貨幣代碼或符號，廣告的「268起」這類裸數字不算）
-            Regex(
-                """(?:消費|交易|付款|支付|扣款|刷卡|轉賬|轉帳|转账|匯款|汇款|金額)\s*[：:]?\s*(?:MOP|HK|RMB|CNY|USD|TWD|NTD|NT|澳門幣|人民幣|港幣|[\$¥€£])\s*\$?\s*\d""",
-                RegexOption.IGNORE_CASE
-            ),
-            // 明確的金額欄位
-            Regex("""(?:交易金額|付款金額|消費金額|扣款金額|轉賬金額|金額)\s*[：:]"""),
-            // 常見支付 App 的交易描述
-            Regex("""(?:你已支付|您已支付|已成功付款|付款給|支付給|轉賬給)"""),
-            // 英文
-            Regex(
-                """(?:payment|transaction|transfer)\s+(?:successful|completed|sent|received|of)""",
-                RegexOption.IGNORE_CASE
-            ),
-            Regex("""you\s+(?:paid|received|sent)""", RegexOption.IGNORE_CASE),
+        val DEFAULT_ALLOWED_PACKAGES = listOf(
+            "com.tencent.mm",                // 微信／微信支付
+            "com.eg.android.AlipayGphone",   // 支付寶（中國本體）
+            "hk.alipay.wallet",              // AlipayHK
+            // 支付寶 SDK／安全支付：部分交易只有這個套件會發通知，一併保留
+            "com.alipay.android.app",
+            "com.macaupass.rechargeEasy",    // MPay / Macau Pass 澳門通
+            "com.google.android.apps.wallet",// Google Pay / Google Wallet
+            "com.apple.wallet",              // Apple Wallet
+            "com.octopus.nfc",               // 八達通
+            "hk.com.boc.bocmobilebanking",   // 中銀香港
+            "com.icbc.imobile"               // 工銀亞洲
         )
 
         fun setMethodChannel(channel: MethodChannel?) {
@@ -289,7 +239,7 @@ class NotificationListenerService : AndroidNotificationListenerService() {
         }
 
         // 提取金額
-        val amount = extractAmount(fullText)
+        val amount = PaymentTextAnalyzer.extractAmount(fullText)
         if (amount == null || amount <= 0) {
             Log.d(TAG, "🚫 無法從通知中提取金額: $fullText")
             return
@@ -298,7 +248,7 @@ class NotificationListenerService : AndroidNotificationListenerService() {
         // 提取商家名稱
         val merchant = extractMerchant(fullText)
         // ✅ 判斷轉帳方向（收入/支出）
-        val isIncome = isIncomeTransfer(fullText)
+        val isIncome = PaymentTextAnalyzer.isIncomeTransfer(fullText)
         // ✅ eventId 加入通知發佈時間：相同金額+相同文字的兩筆轉帳（不同時間）不會再互相誤判為重複
         val eventId = createEventId(packageName, amount, fullText, sbn.postTime)
 
@@ -468,15 +418,8 @@ class NotificationListenerService : AndroidNotificationListenerService() {
 
     // ============================================================
     // ✅ 支付通知判斷（白名單包名 + 廣告過濾 + 交易格式）
+    //    規則本體在 PaymentTextAnalyzer，與無障礙讀屏探針共用
     // ============================================================
-
-    /** 是否為行銷／廣告推播（見 [AD_MARKERS]） */
-    private fun isAdvertisement(text: String): Boolean =
-        AD_MARKERS.any { text.contains(it, ignoreCase = true) }
-
-    /** 是否符合已知的交易通知格式（見 [PAYMENT_SIGNAL_PATTERNS]） */
-    private fun hasPaymentSignal(text: String): Boolean =
-        PAYMENT_SIGNAL_PATTERNS.any { it.containsMatchIn(text) }
 
     private fun isPaymentNotification(text: String, packageName: String): Boolean {
         if (packageName.isNullOrEmpty() || text.isNullOrEmpty()) {
@@ -501,13 +444,13 @@ class NotificationListenerService : AndroidNotificationListenerService() {
 
         // 2) 廣告推播：支付 App 的優惠訊息與交易通知共用同一個包名，
         //    因此這裡必須先擋掉，否則廣告會被當成一筆消費記下來。
-        if (isAdvertisement(text)) {
+        if (PaymentTextAnalyzer.isAdvertisement(text)) {
             Log.d(TAG, "📢 判定為廣告推播，忽略通知: $text")
             return false
         }
 
         // 3) 必須符合已知的交易通知格式（不再用「支付/成功/交易」等寬鬆關鍵字）
-        if (!hasPaymentSignal(text)) {
+        if (!PaymentTextAnalyzer.hasPaymentSignal(text)) {
             Log.d(TAG, "🚫 非交易通知格式，忽略: $text")
             return false
         }
@@ -517,18 +460,15 @@ class NotificationListenerService : AndroidNotificationListenerService() {
 
     private fun getAllowedPackages(): List<String> {
         val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val defaultList = listOf(
-            "com.macaupass.rechargeEasy",
-            "com.alipay.android.app",
-            "com.tencent.mm",
-            "com.google.android.apps.wallet",
-            "com.apple.wallet",
-            "com.octopus.nfc",
-            "hk.com.boc.bocmobilebanking",
-            "com.icbc.imobile"
-        )
+
+        // ⚠️ 不能讀 "flutter.allowed_package_names"：
+        //    shared_preferences 的 StringList 在 Android 上存的是
+        //    "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu" + Java 序列化 Base64，
+        //    不是 JSON。舊版直接 JSONArray() 一定拋例外 → 靜默退回預設值，
+        //    導致使用者自訂的白名單在原生端完全失效。
+        //    Dart 端另外寫了一份純 JSON 鏡像，這裡改讀它。
         try {
-            val jsonStr = prefs.getString("flutter.allowed_package_names", null)
+            val jsonStr = prefs.getString("flutter.allowed_package_names_json", null)
             if (!jsonStr.isNullOrEmpty()) {
                 val jsonArr = JSONArray(jsonStr)
                 val list = mutableListOf<String>()
@@ -541,75 +481,15 @@ class NotificationListenerService : AndroidNotificationListenerService() {
         } catch (e: Exception) {
             Log.e(TAG, "讀取白名單失敗: ${e.message}")
         }
-        return defaultList
+        return DEFAULT_ALLOWED_PACKAGES
     }
 
     // ============================================================
     // ✅ 數據提取
+    //
+    // 金額／方向／廣告的判斷規則都集中在 PaymentTextAnalyzer，
+    // 與無障礙讀屏探針（PaymentAccessibilityService）共用同一套規則。
     // ============================================================
-
-    private fun extractAmount(text: String): Double? {
-        // 1) 貨幣代碼／符號在數字前，例如
-        //   「成功轉賬MOP1.00」→ 1.00、「MOP 1.00」「MOP$1.00」
-        //   「HK$1,234.5」「澳門幣1.00」「金額：HK$ 12.00」
-        val currencyPatterns = listOf(
-            Regex(
-                """(?:MOP|HK|RMB|CNY|USD|EUR|TWD|NTD|JPY|澳門幣|澳门币|人民幣|人民币|港幣|港币|美元|歐元|欧元|台幣|台币|元)\s*\$?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)""",
-                RegexOption.IGNORE_CASE
-            ),
-            // 2) 貨幣單位在數字後，例如「12.00 元」「1,234.50 澳門幣」
-            Regex(
-                """(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:元|圓|块|塊|澳門幣|澳门币|人民幣|人民币|港幣|港币|美元|歐元|欧元|台幣|台币)"""
-            ),
-            // 3) 明確的金額欄位，例如「金額 268」「交易金額：MOP 30」
-            Regex(
-                """(?:交易金額|付款金額|消費金額|扣款金額|轉賬金額|金額)\s*[：:]?\s*\$?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)"""
-            ),
-            // 4) 通用貨幣符號
-            Regex("""[\$¥€£]\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)"""),
-        )
-        for (pattern in currencyPatterns) {
-            for (match in pattern.findAll(text)) {
-                val amountStr = match.groupValues[1].replace(",", "")
-                val amount = amountStr.toDoubleOrNull()
-                if (amount != null && amount > 0) {
-                    return amount
-                }
-            }
-        }
-
-        // 5) 裸數字（含小數），但要排除時間(HH:mm:ss)、日期(2026-09-10)、
-        //    訂單號(2026091003453572166504)、電話號碼等。
-        val bareNumber = Regex(
-            """(?<![\d:./-])(\d{1,3}(?:,\d{3})*\.\d{1,2})(?![\d:./-])"""
-        )
-        for (match in bareNumber.findAll(text)) {
-            val amountStr = match.groupValues[1].replace(",", "")
-            val amount = amountStr.toDoubleOrNull()
-            if (amount != null && amount > 0) {
-                return amount
-            }
-        }
-
-        // 6) 最後手段：緊跟在交易動詞後的數字（整數也接受），例如「支付 50」
-        //
-        // ⚠️ 舊版是「支付/成功/MOP 等關鍵字後 40 字內的第一個整數」，
-        //    範圍過寬，會把廣告文案裡的價格（例如「海鮮自助晚餐 268起」）
-        //    當成交易金額。這裡改成要求數字必須緊接在交易動詞之後，
-        //    且動詞清單只保留真正的交易動作。
-        val afterVerb = Regex(
-            """(?:轉賬|轉帳|转账|轉出|轉入|支付|付款|消費|扣款|匯款|汇款)\s*(?:了|給|至|金額)?\s*(?:MOP|HK\$|RMB|CNY|USD|¥|\$)?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)(?!\d)""",
-            RegexOption.IGNORE_CASE
-        )
-        for (match in afterVerb.findAll(text)) {
-            val amountStr = match.groupValues[1].replace(",", "")
-            val amount = amountStr.toDoubleOrNull()
-            if (amount != null && amount > 0) {
-                return amount
-            }
-        }
-        return null
-    }
 
     private fun extractMerchant(text: String): String? {
         // ✅ 依語意優先順序匹配（與 Dart 端一致）：
@@ -632,15 +512,6 @@ class NotificationListenerService : AndroidNotificationListenerService() {
             }
         }
         return null
-    }
-
-    /** 判斷是否為「收入」轉帳（收到錢）；否則視為支出（付錢出去） */
-    private fun isIncomeTransfer(text: String): Boolean {
-        val incomeKeywords = listOf(
-            "收到", "入賬", "入帳", "轉入", "转入", "收款", "來自", "来自",
-            "匯入", "汇入", "進賬", "進帳", "收入", "credited", "received", "deposit"
-        )
-        return incomeKeywords.any { text.contains(it, ignoreCase = true) }
     }
 
     // ============================================================

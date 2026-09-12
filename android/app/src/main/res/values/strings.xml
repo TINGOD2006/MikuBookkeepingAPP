@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_label">Miku 記帳・付款畫面探針</string>
+    <string name="accessibility_service_description">僅用於讀取指定支付 App（微信、支付寶、MPay 等）顯示的付款／轉帳結果畫面文字，用來判斷能否自動記帳。不會讀取其他 App，也不會上傳任何畫面內容。</string>
+</resources>

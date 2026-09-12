@@ -44,6 +44,27 @@
             </intent-filter>
         </service>
 
+        <!-- ✅ 無障礙讀屏「探針」（可行性驗證用，見 PaymentAccessibilityService.kt）
+             ⚠️ 這不是記帳功能本體，只是用來確認微信／支付寶的付款結果畫面
+                在無障礙節點樹裡有沒有可讀文字。不會建立任何記錄。
+             android:isAccessibilityTool="false" 是誠實標示：本 App 不是
+             無障礙輔助工具。因此 Android 13+ 的 sideload 安裝需要使用者
+             額外允許「限制設定」才能啟用。 -->
+        <service
+            android:name=".PaymentAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true"
+            android:enabled="true"
+            android:isAccessibilityTool="false"
+            android:label="@string/accessibility_service_label">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/payment_accessibility_service_config" />
+        </service>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

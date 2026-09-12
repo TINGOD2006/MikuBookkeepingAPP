@@ -11,6 +11,7 @@ import '../services/storage_service.dart';
 import '../services/notification_listener.dart';
 import '../services/ai_service.dart';
 import '../services/message_service.dart';
+import '../services/accessibility_probe_service.dart';
 import '../utils/amount_formatter.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -888,6 +889,16 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
 
+          // ✅ 新增：無障礙讀屏探針（可行性驗證用，不會建立記錄）
+          _buildSettingsItem(
+            icon: Icons.visibility_outlined,
+            label: '無障礙讀屏探針',
+            trailing: TextButton(
+              onPressed: _showAccessibilityProbeDialog,
+              child: const Text('查看', style: TextStyle(color: AppColor.primary)),
+            ),
+          ),
+
           // ✅ 新增：分類規則表管理（用戶自訂詞條）
           _buildSettingsItem(
             icon: Icons.rule_outlined,
@@ -1097,6 +1108,188 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  // ========== 無障礙讀屏探針對話框（可行性驗證） ==========
+  Future<void> _showAccessibilityProbeDialog() async {
+    bool enabled = await AccessibilityProbeService.isEnabled();
+    List<AccessibilityProbeLog> logs =
+        await AccessibilityProbeService.loadLogs();
+
+    // ✅ await 之後才使用 BuildContext，必須先確認 widget 仍在畫面上
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            Future<void> refresh() async {
+              final isEnabled = await AccessibilityProbeService.isEnabled();
+              final items = await AccessibilityProbeService.loadLogs();
+              setStateDialog(() {
+                enabled = isEnabled;
+                logs = items;
+              });
+            }
+
+            return AlertDialog(
+              backgroundColor: AppColor.background,
+              title: const Text(
+                '無障礙讀屏探針',
+                style: TextStyle(color: AppColor.text, fontSize: 18),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      enabled
+                          ? '✅ 服務已啟用'
+                          : '⚠️ 服務未啟用，請到系統設定的無障礙功能中開啟',
+                      style: TextStyle(
+                        color: enabled ? Colors.greenAccent : Colors.orangeAccent,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '這是「可行性驗證」工具，不會建立任何記帳記錄。\n'
+                      '啟用後請到微信／支付寶完成一次付款或轉帳，再回來按「重新整理」，'
+                      '即可看到對方的付款畫面到底有沒有可讀文字。',
+                      style: TextStyle(color: Colors.grey, fontSize: 11),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            AccessibilityProbeService.openSettings();
+                          },
+                          child: const Text(
+                            '前往設定',
+                            style: TextStyle(color: AppColor.primary, fontSize: 12),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: refresh,
+                          child: const Text(
+                            '重新整理',
+                            style: TextStyle(color: AppColor.primary, fontSize: 12),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            await AccessibilityProbeService.clearLogs();
+                            await refresh();
+                          },
+                          child: const Text(
+                            '清除',
+                            style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Colors.grey),
+                    if (logs.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Text(
+                            '尚無紀錄\n請先啟用服務，並操作一次付款或轉帳',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                          ),
+                        ),
+                      )
+                    else
+                      SizedBox(
+                        height: 320,
+                        child: ListView.builder(
+                          itemCount: logs.length,
+                          itemBuilder: (context, index) {
+                            // 最新的排在最上面
+                            final log = logs[logs.length - 1 - index];
+                            return _buildProbeLogItem(log);
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    '關閉',
+                    style: TextStyle(color: AppColor.primary),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildProbeLogItem(AccessibilityProbeLog log) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                log.formattedTime,
+                style: const TextStyle(
+                  color: AppColor.textSecondary,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  log.packageName,
+                  style: const TextStyle(color: AppColor.text, fontSize: 11),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            log.verdict,
+            style: const TextStyle(
+              color: AppColor.text,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '節點 ${log.nodeCount} 個／有文字 ${log.textCount} 個・${log.eventType}',
+            style: const TextStyle(color: AppColor.textSecondary, fontSize: 10),
+          ),
+          if (log.text.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            SelectableText(
+              log.text,
+              style: const TextStyle(color: Colors.grey, fontSize: 10),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   // ========== 管理白名單包名對話框 ==========
   Future<void> _showAllowedPackagesDialog() async {
     List<String> packages = await NotificationListenerService.getAllowedPackages();
@@ -1197,6 +1390,21 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
               actions: [
+                // ✅ 已有自訂清單的使用者不會自動套用新的預設值，
+                //    提供一鍵恢復預設（含微信／支付寶）
+                TextButton(
+                  onPressed: () {
+                    setStateDialog(() {
+                      packages = List<String>.from(
+                        NotificationListenerService.defaultAllowedPackages,
+                      );
+                    });
+                  },
+                  child: const Text(
+                    '恢復預設',
+                    style: TextStyle(color: AppColor.primary),
+                  ),
+                ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: const Text('取消', style: TextStyle(color: Colors.grey)),
